@@ -9,11 +9,7 @@ from os import environ
 from Utils.headers import *
 from PolicyManagers.PolicyNetworks import *
 
-from Utils.Visualizers import BaxterVisualizer, SawyerVisualizer, FrankaVisualizer, ToyDataVisualizer, \
-	GRABVisualizer, GRABHandVisualizer, GRABArmHandVisualizer, DAPGVisualizer, \
-	RoboturkObjectVisualizer, RoboturkRobotObjectVisualizer,\
-	RoboMimicObjectVisualizer, RoboMimicRobotObjectVisualizer, DexMVVisualizer, \
-	FrankaKitchenVisualizer, FetchMOMARTVisualizer, DatasetImageVisualizer
+from Utils.Visualizers import ToyDataVisualizer
 
 # Check if CUDA is available, set device to GPU if it is, otherwise use CPU.
 use_cuda = torch.cuda.is_available()
@@ -27,8 +23,74 @@ global_dataset_list = [ 'DAPG', 'DAPGHand', 'DAPGObject', 'DexMV', 'DexMVHand', 
 
 class PolicyManager_BaseClass():
 
-	def __init__(self):
+	def __init__(self, number_policies=4, dataset=None, args=None):
 		super(PolicyManager_BaseClass, self).__init__()
+		self.args = args
+		# Fixing seeds.
+		print("Setting random seeds.")
+
+		print("self.args.seed: ", self.args.seed)
+		np.random.seed(seed=self.args.seed)
+		torch.manual_seed(self.args.seed)	
+
+		self.data = self.args.data
+		self.dataset = dataset
+
+		self.number_policies = number_policies # Not used if discrete_z is false.
+
+		# Model size parameters
+		self.state_size = self.dataset.state_size 
+		self.state_dim = self.dataset.state_dim
+		self.input_size = 2*self.state_size
+		self.hidden_size = self.args.hidden_size
+		# Number of actions
+		self.output_size = self.state_size		
+		self.latent_z_dimensionality = self.args.z_dimensions
+		self.number_layers = self.args.number_layers
+		self.traj_length = self.args.traj_length
+		self.number_epochs = self.args.epochs
+		self.test_set_size = 0
+		self.conditional_info_size = 0
+
+		stat_dir_name = self.dataset.stat_dir_name
+		if self.args.normalization=='meanvar':
+			self.norm_sub_value = np.load("./data/Statistics/{0}/{0}_Mean.npy".format(stat_dir_name))
+			self.norm_denom_value = np.load("./data/Statistics/{0}/{0}_Var.npy".format(stat_dir_name))
+		elif self.args.normalization=='minmax':
+			self.norm_sub_value = np.load("./data/Statistics/{0}/{0}_Min.npy".format(stat_dir_name))
+			self.norm_denom_value = np.load("./data/Statistics/{0}/{0}_Max.npy".format(stat_dir_name)) - self.norm_sub_value
+			self.norm_denom_value[np.where(self.norm_denom_value==0)] = 1
+			self.norm_sub_value = self.norm_sub_value[:self.state_dim]
+			self.norm_denom_value = self.norm_denom_value[:self.state_dim]
+
+		# Training parameters. 		
+		self.baseline_value = 0.
+		self.beta_decay = 0.9
+		self.learning_rate = self.args.learning_rate
+		
+		self.initial_epsilon = self.args.epsilon_from
+		self.final_epsilon = self.args.epsilon_to
+		self.decay_epochs = self.args.epsilon_over
+		self.decay_counter = self.decay_epochs*(len(self.dataset)//self.args.batch_size+1)
+		self.variance_decay_counter = self.args.policy_variance_decay_over*(len(self.dataset)//self.args.batch_size+1)
+		
+		if self.args.kl_schedule:
+			self.kl_increment_epochs = self.args.kl_increment_epochs
+			self.kl_increment_counter = self.kl_increment_epochs*(len(self.dataset)//self.args.batch_size+1)
+			self.kl_begin_increment_epochs = self.args.kl_begin_increment_epochs
+			self.kl_begin_increment_counter = self.kl_begin_increment_epochs*(len(self.dataset)//self.args.batch_size+1)
+			self.kl_increment_rate = (self.args.final_kl_weight-self.args.initial_kl_weight)/(self.kl_increment_counter)
+			self.kl_phase_length_counter = self.args.kl_cyclic_phase_epochs*(len(self.dataset)//self.args.batch_size+1)
+		# Log-likelihood penalty.
+		self.lambda_likelihood_penalty = self.args.likelihood_penalty
+		self.baseline = None
+
+		# Per step decay. 
+		self.decay_rate = (self.initial_epsilon-self.final_epsilon)/(self.decay_counter)	
+		self.linear_variance_decay_rate = (self.args.initial_policy_variance - self.args.final_policy_variance)/(self.variance_decay_counter)
+		self.quadratic_variance_decay_rate = (self.args.initial_policy_variance - self.args.final_policy_variance)/(self.variance_decay_counter**2)
+
+		self.blah = 0
 
 	def setup(self):
 
@@ -46,12 +108,9 @@ class PolicyManager_BaseClass():
 
 		self.index_list = np.arange(0,extent)
 		self.initialize_plots()
-		
+
 	def create_networks(self):
-		
-		# print("Embed in create networks")
-		# embed()
-		
+
 		# Create K Policy Networks. 
 		# This policy network automatically manages input size. 
 		if self.args.discrete_z:

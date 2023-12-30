@@ -136,22 +136,13 @@ class MAGI_PreDataset(Dataset):
 			# print("number of demos: ", len(datapoints))
 			
 			for datapoint in datapoints:
-				#print("datapoint: ", datapoint.shape)
-				# datapoint_padded = np.pad(datapoint, (0, self.object_joint_max - datapoint.shape[1]), "constant")
 
 				relevant_joints_datapoint = self.subsample_relevant_joints(datapoint, v)
-
-				# Reshape. 
 				reshaped_normalized_datapoint = relevant_joints_datapoint.reshape(relevant_joints_datapoint.shape[0],-1)
-
 				self.state_size = reshaped_normalized_datapoint.shape[1]
-
 				# Subsample in time. 
 				number_of_timesteps = datapoint.shape[0]//self.ds_freq
-				# subsampled_data = resample(relevant_joints_datapoint, number_of_timesteps)
 				subsampled_data = resample(reshaped_normalized_datapoint, number_of_timesteps)
-				# subsampled_object_data = resample(reshaped_normalized_object_datapoint, number_of_timesteps)
-				
 				# Add subsampled datapoint to file. 
 				self.files.append(subsampled_data)      
       
@@ -161,12 +152,19 @@ class MAGI_PreDataset(Dataset):
 		# Create array. 
 		self.file_array = np.array(self.files)
 		# self.object_file_array = np.array(self.object_files)
+		self.dims = {}
+
+		self.dims["state_size"] = len(self.joint_indices)
+		self.dims["state_dim"] = len(self.joint_indices)
+		self.dims["robot_state_dim"] = self.robot_state_dim
+		self.dims["env_state_dim"] = self.env_state_dim
 
 		# Now save these files.
 		self.dataset_directory = self.dataset_directory
 		np.save(os.path.join(self.dataset_directory, self.getname() + "_DataFile_BaseNormalize.npy"), self.file_array)
 		np.save(os.path.join(self.dataset_directory, self.getname() + "_OrderedFileList.npy"), self.filelist)
 		np.save(os.path.join(self.dataset_directory, self.getname() + "_Lengths.npy"), self.cumulative_num_demos)
+		np.save(os.path.join(self.dataset_directory, self.getname() + "_Dims.npy"), self.dims)
 
 	def normalize(self, relevant_joints_datapoint):
 		return relevant_joints_datapoint
@@ -282,21 +280,22 @@ class MAGI_Dataset(Dataset):
 		   
 		# Load file.
 		self.data_list = np.load(os.path.join(self.dataset_directory , self.getname() + "_DataFile_BaseNormalize.npy"), allow_pickle=True)
-		#print(self.dataset_directory, self.getname() + "_DataFile_BaseNormalize.npy")
-		#self.data_list = np.load("/ws/CausalSkillLearning/demonstrations/DexMVFull_DataFile_BaseNormalize.npy", allow_pickle=True)
-		#print("self.data_list:\n", self.data_list)
-		
 		self.filelist = np.load(os.path.join(self.dataset_directory, self.getname() + "_OrderedFileList.npy"), allow_pickle=True)
 		self.cumulative_num_demos = np.load(os.path.join(self.dataset_directory, self.getname() + "_Lengths.npy"), allow_pickle=True)
+		self.dims = np.load(os.path.join(self.dataset_directory, self.getname() + "_Dims.npy"), allow_pickle=True)
+
+		self.state_size = self.dims.flat[0]['state_size']
+		self.state_dim = self.dims.flat[0]["state_dim"]
+		self.robot_state_dim = self.dims.flat[0]["robot_state_dim"]
+		self.env_state_dim = self.dims.flat[0]["env_state_dim"]
 
 		self.dataset_length = len(self.data_list)
-		
+		# print("self.data_list", self.data_list)
 		print("dataset_length", self.dataset_length)
 		print("dataset_length", self.dataset_length)
 		print("dataset_length", self.dataset_length)
 		if self.args.dataset_traj_length_limit>0:			
 			self.short_data_list = []
-			# self.short_data_list2 = []
 			self.short_file_list = []
 			self.dataset_trajectory_lengths = []
 			for i in range(self.dataset_length):
@@ -318,10 +317,10 @@ class MAGI_Dataset(Dataset):
 		self.data_list_array = np.array(self.data_list)		
 
 		self.environment_names = []
-		print("self.filelist: ", self.filelist)
+		# print("self.filelist: ", self.filelist)
 		for i in range(len(self.filelist)):
 			f = self.filelist[i][len(self.dataset_directory):-4] # remove path and .pkl
-			print("f: ", f)
+			# print("f: ", f)
 			for j in range(self.cumulative_num_demos[i], self.cumulative_num_demos[i+1]):
 				self.environment_names.append(f)
 		print("Env names:\n", np.unique(self.environment_names))

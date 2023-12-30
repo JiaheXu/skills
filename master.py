@@ -28,14 +28,10 @@ class Master():
 		self.args = arguments 
 
 		print("Creating Datasets")			
-		self.dataset = return_dataset(self.args, create_dataset_variation=self.args.dataset_variation)			
-
-		# print("Embed after dataset creation")
-		# embed()
+		self.dataset = return_dataset(self.args, create_dataset_variation=self.args.dataset_variation)
 
 		if self.args.setting=='pretrain_sub':
-			self.policy_manager = PolicyManager_BatchPretrain(self.args.number_policies, self.dataset, self.args)
-
+			self.policy_manager = PolicyManager_BatchPretrain(self.dataset, self.args)
 
 		if self.args.debug:
 			print("Embedding in Master.")
@@ -326,9 +322,9 @@ def main(args):
 	args = parse_arguments()
 	master = Master(args)
 
-	if( args.use_wandb ):
-		wandb.init(project=args.setting, dir=args.logdir, name=args.name)
-		wandb.config.update(args)
+	# if( args.use_wandb ):
+	# 	wandb.init(project=args.setting, dir=args.logdir, name=args.name)
+	# 	wandb.config.update(args)
 	master.run()
 	print("done !!!")
 	print("done !!!")
