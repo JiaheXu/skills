@@ -315,6 +315,9 @@ def parse_arguments():
 	parser.add_argument('--task_based_supervision',dest='task_based_supervision',type=int,default=0,help='Whether or not we are using task based supervision.')
 
 	parser.add_argument('--use_wandb',dest='use_wandb',type=int,default=1,help='Whether or not we are using wandb')
+
+
+	parser.add_argument('--test_set_size',dest="test_set_size",type=int,default=0,help='test_set_size')
 	return parser.parse_args()
 
 def main(args):
@@ -322,9 +325,9 @@ def main(args):
 	args = parse_arguments()
 	master = Master(args)
 
-	# if( args.use_wandb ):
-	# 	wandb.init(project=args.setting, dir=args.logdir, name=args.name)
-	# 	wandb.config.update(args)
+	if( args.use_wandb ):
+		wandb.init(project=args.setting, dir=args.logdir, name=args.name)
+		wandb.config.update(args)
 	master.run()
 	print("done !!!")
 	print("done !!!")
