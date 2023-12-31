@@ -1,48 +1,51 @@
-ContinuousFactoredEncoderNetwork
-forward()
-concatenated_latent_z = torch.cat([robot_latent_z, env_latent_z],axis=-1)
+	def get_trajectory(self, i, k):
+		
+		# print("in PM_BatchPretrain get_trajectory func !!!")
+		# print("in PM_BatchPretrain get_trajectory func !!!")
+		# print("in PM_BatchPretrain get_trajectory func !!!")
 
-ContinuousSequentialFactoredEncoderNetwork
-from ContinuousFactoredEncoderNetwork
-ContinuousFactoredSoftEncoderNetwor
-from ContinuousFactoredEncoderNetwork
+		if self.args.data in global_dataset_list:
 
+			data_element = self.dataset[self.index_list[i]]
+			# print("index_list: ", self.index_list[i])
+			self.current_traj_len = 14     
 
-PolicyManager_BatchJoint
-from ContinuousSequentialFactoredEncoderNetwork
-class PolicyManager_BatchJointQueryMode(PolicyManager_BatchJoint):
-from PolicyManager_BatchJoint
+			# print("self.current_traj_len: ", self.current_traj_len)
 
+			batch_trajectory = np.zeros((self.args.batch_size, self.current_traj_len, self.state_size))
+			self.subsampled_relative_object_state = np.zeros((self.args.batch_size, self.current_traj_len, self.args.env_state_size))
 
+			# POTENTIAL:
+			# for x in range(min(self.args.batch_size, len(self.index_list) - 1)):
 
+			# Changing this selection, assuming that the index_list is corrected to only have within dataset length indices.
+			for x in range(self.args.batch_size):
+			
+				# Select the trajectory for each instance in the batch. 
+				if self.args.ee_trajectories:
+					traj = data_element[x]['endeffector_trajectory']
+				else:
+					traj = data_element['demo'][k: k+14]
+           
+				batch_trajectory[x] = data_element['demo'][k: k+14]
 
-class PolicyManager_Pretrain(PolicyManager_BaseClass):
-from ContinuousFactoredEncoderNetwork
+			# print("batch_trajectory: ", batch_trajectory.shape)
+			# If normalization is set to some value.
+			if self.args.normalization=='meanvar' or self.args.normalization=='minmax':
+				batch_trajectory = (batch_trajectory-self.norm_sub_value)/self.norm_denom_value
 
-class PolicyManager_Imitation(PolicyManager_Pretrain, PolicyManager_BaselineRL):
-from PolicyManager_Pretrain
+				if self.args.data not in ['NDAX','NDAXMotorAngles']:
+					self.normalized_subsampled_relative_object_state = (self.subsampled_relative_object_state - self.norm_sub_value[-self.args.env_state_size:])/self.norm_denom_value[-self.args.env_state_size:]
 
-class PolicyManager_BatchPretrain(PolicyManager_Pretrain):
-from class PolicyManager_Pretrain(PolicyManager_BaseClass):
+			# Compute actions.
+			action_sequence = np.diff(batch_trajectory,axis=1)
+			if self.args.data not in ['NDAX','NDAXMotorAngles']:
+				self.relative_object_state_actions = np.diff(self.normalized_subsampled_relative_object_state, axis=1)
 
+			# Concatenate
+			concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
 
+			# Scaling action sequence by some factor.             
+			scaled_action_sequence = self.args.action_scale_factor*action_sequence
 
-class diff(PolicyManager_BaseClass):
-from PolicyManager_Pretrain
-
-class PolicyManager_Transfer(PolicyManager_BaseClass):
-from PolicyManager_Pretrain
-
-
-
-class PolicyManager_DMPBaselines(PolicyManager_Joint):
-from PolicyManager_Joint
-
-class PolicyManager_JointFixEmbedTransfer(PolicyManager_Transfer):
-from PolicyManager_Transfer
-
-class PolicyManager_CycleConsistencyTransfer(PolicyManager_Transfer):
-from PolicyManager_Transfer
-
-class PolicyManager_JointTransfer(PolicyManager_Transfer):
-from PolicyManager_Joint
+			# return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2))

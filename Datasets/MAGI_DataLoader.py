@@ -45,7 +45,7 @@ class MAGI_PreDataset(Dataset):
 		self.total_length = len(self.filelist)
 
 		# Set downsampling frequency.
-		self.ds_freq = 8
+		self.ds_freq = 1
 
 		# Setup. 
 		self.setup()
@@ -272,6 +272,8 @@ class MAGI_Dataset(Dataset):
 		# Some book-keeping first. 
 		self.args = args
 		self.stat_dir_name = 'MAGI'
+		
+		self.ds_freq = args.ds_freq
 
 		if self.args.datadir is None:
 			self.dataset_directory = '../data/MAGI/'
@@ -280,6 +282,8 @@ class MAGI_Dataset(Dataset):
 		   
 		# Load file.
 		self.data_list = np.load(os.path.join(self.dataset_directory , self.getname() + "_DataFile_BaseNormalize.npy"), allow_pickle=True)
+		self.original_data = np.load(os.path.join(self.dataset_directory , self.getname() + "_DataFile_BaseNormalize.npy"), allow_pickle=True)
+		
 		self.filelist = np.load(os.path.join(self.dataset_directory, self.getname() + "_OrderedFileList.npy"), allow_pickle=True)
 		self.cumulative_num_demos = np.load(os.path.join(self.dataset_directory, self.getname() + "_Lengths.npy"), allow_pickle=True)
 		self.dims = np.load(os.path.join(self.dataset_directory, self.getname() + "_Dims.npy"), allow_pickle=True)
@@ -290,10 +294,20 @@ class MAGI_Dataset(Dataset):
 		self.env_state_dim = self.dims.flat[0]["env_state_dim"]
 
 		self.dataset_length = len(self.data_list)
+
+		
+
 		# print("self.data_list", self.data_list)
 		print("dataset_length", self.dataset_length)
 		print("dataset_length", self.dataset_length)
 		print("dataset_length", self.dataset_length)
+
+		for i in range(self.dataset_length):
+			number_of_timesteps = self.data_list[i].shape[0]//self.ds_freq
+			# print("before downsample: ", self.data_list[i].shape[0])
+			self.data_list[i] = resample(self.data_list[i], int(number_of_timesteps)) 
+			# print("after downsample: ", self.data_list[i].shape[0])
+
 		if self.args.dataset_traj_length_limit>0:			
 			self.short_data_list = []
 			self.short_file_list = []
@@ -301,7 +315,6 @@ class MAGI_Dataset(Dataset):
 			for i in range(self.dataset_length):
 				if self.data_list[i].shape[0]<self.args.dataset_traj_length_limit:
 					self.short_data_list.append(self.data_list[i])
-					# self.short_data_list2.append(self.object_data_list[i])
 					self.dataset_trajectory_lengths.append(self.data_list[i].shape[0])
 
 			for i in range(len(self.filelist)):
@@ -330,28 +343,16 @@ class MAGI_Dataset(Dataset):
 		return "MAGI"
 
 	def __len__(self):
-		# Return length of file list. 
+
 		return self.dataset_length
 
 	def __getitem__(self, index):
-		# Return n'th item of dataset.
-		# This has already processed everything.
-
-		# if isinstance(index,np.ndarray):			
-		# 	return list(self.data_list_array[index])
-		# else:
-		# 	return self.data_list[index]
 
 		data_element = {}
 		data_element['is_valid'] = True
 		data_element['demo'] = self.data_list[index]
-		# data_element['object-state'] = self.object_data_list[index]
-		# data_element['demo'] = np.concatenate((self.data_list[index], self.object_data_list[index]), axis=1)
-		# task_index = np.searchsorted(self.cumulative_num_demos, index, side='right')-1
-		# data_element['file'] = self.filelist[task_index][81:-7]
 		data_element['file'] = self.environment_names[index]
 		data_element['task-id'] = index
-		# print("Printing the index and the task ID from dataset:", index, data_element['file'])
 
 		return data_element
 	

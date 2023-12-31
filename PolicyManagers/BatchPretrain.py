@@ -33,6 +33,8 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		self.linear_variance_decay_rate = (self.args.initial_policy_variance - self.args.final_policy_variance)/(self.variance_decay_counter)
 		self.quadratic_variance_decay_rate = (self.args.initial_policy_variance - self.args.final_policy_variance)/(self.variance_decay_counter**2)
 
+		self.state_trajectory_test = None
+
 	def create_networks(self):
 		
 		# Create K Policy Networks. 
@@ -69,221 +71,142 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		# Optimize with reguliarzation weight.
 		self.optimizer = torch.optim.Adam(self.parameter_list,lr=self.learning_rate,weight_decay=self.args.regularization_weight)
 
-	def run_iteration(self, counter, i, k=0, return_z=False, and_train=True): 
-		
+	def run_iteration(self, counter, i, return_z=False, and_train=True): 
 		# return_z=True, and_train=False) for evaluate
 		# self.run_iteration(counter, i) for train
+		if self.args.debug:
+			print("in PM_BatchPretrain run_iteration func !!!")
+			print("in PM_Pretrain run_iteration func !!!")
+			print("in PM_Pretrain run_iteration func !!!")
 
-		print("in PM_BatchPretrain run_iteration func !!!")
-		# print("in PM_Pretrain run_iteration func !!!")
-		# print("in PM_Pretrain run_iteration func !!!")
-
-		####################################
-		####################################
-		# Basic Training Algorithm: 
+		# Training Process: 
 		# For E epochs:
 		# 	# For all trajectories:
 		#		# Sample trajectory segment from dataset. 
 		# 		# Encode trajectory segment into latent z. 
 		# 		# Feed latent z and trajectory segment into policy network and evaluate likelihood. 
 		# 		# Update parameters. 
-		####################################
-		####################################
 
 		self.set_epoch(counter)
-
-		############# (0) ##################
-		# Sample trajectory segment from dataset. 
-		####################################
 
 		# Sample trajectory segment from dataset.
 		input_dict = {}
 
-		if(self.args.data == "MAGI" and self.args.train == 0):
-			input_dict['state_action_trajectory'], input_dict['sample_action_seq'], input_dict['sample_traj'], input_dict['data_element'] = self.get_trajectory(i ,k)
-
-			# print("input_dict['state_action_trajectory']: ", input_dict['state_action_trajectory'].shape)
-			# print("input_dict['sample_action_seq']: ", input_dict['sample_action_seq'].shape)
-			# print("input_dict['sample_traj']: ", input_dict['sample_traj'].shape)
-			#print("input_dict['data_element']: ", input_dict['data_element'].shape)
-		else:
+		if( self.args.train ):
 			input_dict['state_action_trajectory'], input_dict['sample_action_seq'], input_dict['sample_traj'], input_dict['data_element'] = self.get_trajectory_segment(i)
-
-
+		
 		self.sample_traj_var = input_dict['sample_traj']
 		self.input_dict = input_dict
-		####################################
-		############# (0a) #############
-		####################################
 
-		####################################
-		# for evaluation as well? Todo
-		####################################
-		# Corrupt the inputs according to how much input_corruption_noise is set to.
-		state_action_trajectory = self.corrupt_inputs(input_dict['state_action_trajectory'])
+		state_action_trajectory = self.corrupt_inputs(input_dict['state_action_trajectory']) # add noise
 		# print("state_action_trajectory: ", state_action_trajectory.shape)
+
 		if state_action_trajectory is not None:
-			
-			####################################
-			############# (1) #############
-			####################################
 
 			torch_traj_seg = torch.tensor(state_action_trajectory).to(device).float()
 			# Encode trajectory segment into latent z. 		
-						
 			latent_z, encoder_loglikelihood, encoder_entropy, kl_divergence = self.encoder_network.forward(torch_traj_seg, self.epsilon) #!!!!!!!! here
-			# here is how we get latent_z, need to check dim
 
-			####################################
-			########## (2) & (3) ##########
-			####################################
+			update_dict = input_dict
+			update_dict['latent_z'] = latent_z
 
-			# Feed latent z and trajectory segment into policy network and evaluate likelihood. 
-			latent_z_seq, latent_b = self.construct_dummy_latents(latent_z)
-
-			############# (3a) #############
-			_, subpolicy_inputs, sample_action_seq = self.assemble_inputs(state_action_trajectory, latent_z_seq, latent_b, input_dict['sample_action_seq'])
+			# Feed latent z and trajectory segment into policy network and evaluate likelihood.
+			if( self.args.train ):
+				latent_z_seq, latent_b = self.construct_dummy_latents(latent_z)
+				_, subpolicy_inputs, sample_action_seq = self.assemble_inputs(state_action_trajectory, latent_z_seq, latent_b, input_dict['sample_action_seq'])
 			
-			############# (3b) #############
-			# Policy net doesn't use the decay epislon. (Because we never sample from it in training, only rollouts.)
-
-			loglikelihoods, _ = self.policy_network.forward(subpolicy_inputs, sample_action_seq, self.policy_variance_value)
-			loglikelihood = loglikelihoods[:-1].mean()
-			 
-			if self.args.debug:
-				print("Embedding in Train.")
-				embed()
-
-			####################################
-			# (4) Update parameters. 
-			####################################
+				# Policy net doesn't use the decay epislon. (Because we never sample from it in training, only rollouts.)
+				loglikelihoods, _ = self.policy_network.forward(subpolicy_inputs, sample_action_seq, self.policy_variance_value)
+				loglikelihood = loglikelihoods[:-1].mean()
 			
-			if self.args.train and and_train:
+				if and_train: #Update parameters based on likelihood, subpolicy inputs, and kl divergence.
+					self.update_policies_reparam(loglikelihood, kl_divergence, update_dict=update_dict)
+					# Update Plots.
+					stats = {}
+					stats['counter'] = counter
+					stats['i'] = i
+					stats['epoch'] = self.current_epoch_running
+					stats['batch_size'] = self.args.batch_size			
+					self.update_plots(counter, loglikelihood, state_action_trajectory, stats)
 
-				####################################
-				# (4a) Update parameters based on likelihood, subpolicy inputs, and kl divergence.
-				####################################
-				
-				update_dict = input_dict
-				update_dict['latent_z'] = latent_z				
-
-				self.update_policies_reparam(loglikelihood, kl_divergence, update_dict=update_dict)
-
-				####################################
-				# (4b) Update Plots. 
-				####################################
-				
-				stats = {}
-				stats['counter'] = counter
-				stats['i'] = i
-				stats['epoch'] = self.current_epoch_running
-				stats['batch_size'] = self.args.batch_size			
-				self.update_plots(counter, loglikelihood, state_action_trajectory, stats)
-
-				####################################
-				# (5) Return.
-				####################################
-
-			if return_z:
-				return latent_z, input_dict['sample_traj'], sample_action_seq, input_dict['data_element']
+				if return_z:
+					return latent_z, input_dict['sample_traj'], sample_action_seq, input_dict['data_element']
 									
-		else: 
-			return None, None, None
+		return None, None, None, None
 
+	def run_evaluate_iteration(self, i): 
+		# return_z=True, and_train=False) for evaluate
+		# self.run_iteration(counter, i) for train
+		if self.args.debug:
+			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
+			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
+			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 
+		state_action_trajectory = self.state_trajectory_test[i*self.args.batch_size: (i+1)*self.args.batch_size]
+		print("state_action_trajectory: ", state_action_trajectory.shape)
+		action_sequence = np.diff(state_action_trajectory,axis=1)
+		# print("trajectory: ", trajectory.shape)
+		# print("action_sequence: ", action_sequence.shape)
+		state_action_trajectory_test = self.concat_state_action(state_action_trajectory, action_sequence)
 
-	def concat_state_action(self, sample_traj, sample_action_seq):
-		# Add blank to start of action sequence and then concatenate. 
-		sample_action_seq = np.concatenate([np.zeros((self.args.batch_size,1,self.output_size)),sample_action_seq],axis=1)
-
-		# Currently returns: 
-		# s0, s1, s2, s3, ..., sn-1, sn
-		#  _, a0, a1, a2, ..., an_1, an
-		return np.concatenate([sample_traj, sample_action_seq],axis=-1)
-
-	def old_concat_state_action(self, sample_traj, sample_action_seq):
-		sample_action_seq = np.concatenate([sample_action_seq, np.zeros((self.args.batch_size,1,self.output_size))],axis=1)
-		return np.concatenate([sample_traj, sample_action_seq],axis=-1)
+		print("state_action_trajectory_test: ", state_action_trajectory_test.shape)
+		state_action_trajectory_test = state_action_trajectory_test.transpose((1,0,2))
 		
-	def get_batch_element(self, i):
-
-		# Make data_element a list of dictionaries. 
-		data_element = []
-						
-		# for b in range(min(self.args.batch_size, len(self.index_list) - i)):
-		# Changing this selection, assuming that the index_list is corrected to only have within dataset length indices.
-		for b in range(self.args.batch_size):
-
-			# print("Index that the get_batch_element is using: b:",b," i+b: ",i+b, self.index_list[i+b])
-			# Because of the new creation of index_list in random shuffling, this should be safe to index dataset with.
-
-			# print("Getting data element, b: ", b, "i+b ", i+b, "index_list[i+b]: ", self.index_list[i+b])
-			index = self.index_list[ (i+b) % len(self.dataset) ]
-
-			if self.args.train:
-				self.coverage[index] += 1
-			data_element.append(self.dataset[index])
-
-		return data_element
-
-	def get_trajectory(self, i, k):
+		torch_traj_seg = torch.tensor(state_action_trajectory_test).to(device).float()	
+		latent_z, encoder_loglikelihood, encoder_entropy, kl_divergence = self.encoder_network.forward(torch_traj_seg, 0.0) #!!!!!!!! here
+		latent_z = latent_z.detach().cpu().numpy()
 		
-		# print("in PM_BatchPretrain get_trajectory func !!!")
-		# print("in PM_BatchPretrain get_trajectory func !!!")
-		# print("in PM_BatchPretrain get_trajectory func !!!")
+		print("evaluate latent shape: ", latent_z.shape)
+		print("evaluate latent shape: ", latent_z.shape)
+		print("evaluate latent shape: ", latent_z.shape)
 
-		if self.args.data in global_dataset_list:
+		# update_dict = input_dict
+		# update_dict['latent_z'] = latent_z
+		return 
 
-			data_element = self.dataset[self.index_list[i]]
-			# print("index_list: ", self.index_list[i])
-			self.current_traj_len = 14     
 
-			# print("self.current_traj_len: ", self.current_traj_len)
+	def get_all_segment(self, data_element):
+		traj = []
+		for start_time in range(0, data_element['demo'].shape[0] - self.args.test_length, self.args.test_length ):
+			end_time = start_time + self.args.test_length
+			if(end_time >= data_element['demo'].shape[0]):
+				break
+			traj.append( data_element['demo'][start_time: end_time] )
+		traj = np.array(traj)
+		return traj
 
-			batch_trajectory = np.zeros((self.args.batch_size, self.current_traj_len, self.state_size))
-			self.subsampled_relative_object_state = np.zeros((self.args.batch_size, self.current_traj_len, self.args.env_state_size))
-
-			# POTENTIAL:
-			# for x in range(min(self.args.batch_size, len(self.index_list) - 1)):
-
-			# Changing this selection, assuming that the index_list is corrected to only have within dataset length indices.
-			for x in range(self.args.batch_size):
-			
-				# Select the trajectory for each instance in the batch. 
-				if self.args.ee_trajectories:
-					traj = data_element[x]['endeffector_trajectory']
+	def get_evaluate_data(self):
+		trajectory = None
+		for i in range( len(self.dataset.filelist) ):
+			for j in range( self.args.test_len_pertask ):
+				idx = self.dataset.cumulative_num_demos[i] + j
+				if (trajectory is None):
+					trajectory = self.get_all_segment( self.dataset[idx] )
 				else:
-					traj = data_element['demo'][k: k+14]
-           
-				batch_trajectory[x] = data_element['demo'][k: k+14]
+					trajectory = np.concatenate( (trajectory, self.get_all_segment(self.dataset[idx]) )  )
+				# print("trajectory: ", trajectory)
 
-			# print("batch_trajectory: ", batch_trajectory.shape)
-			# If normalization is set to some value.
-			if self.args.normalization=='meanvar' or self.args.normalization=='minmax':
-				batch_trajectory = (batch_trajectory-self.norm_sub_value)/self.norm_denom_value
+		end_idx = ( trajectory.shape[0] // self.args.batch_size ) * self.args.batch_size
+		self.state_trajectory_test = trajectory[0: end_idx]
 
-				if self.args.data not in ['NDAX','NDAXMotorAngles']:
-					self.normalized_subsampled_relative_object_state = (self.subsampled_relative_object_state - self.norm_sub_value[-self.args.env_state_size:])/self.norm_denom_value[-self.args.env_state_size:]
 
-			# Compute actions.
-			action_sequence = np.diff(batch_trajectory,axis=1)
-			if self.args.data not in ['NDAX','NDAXMotorAngles']:
-				self.relative_object_state_actions = np.diff(self.normalized_subsampled_relative_object_state, axis=1)
+		return
 
-			# Concatenate
-			concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
+	def evaluate(self, model=None):
+		if model:
+			print("Loading model in evaluating.")
+			self.load_all_models(model)	
+		self.get_evaluate_data() #concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
+		for i in range( self.state_trajectory_test.shape[0]//self.args.batch_size ):
+			self.run_evaluate_iteration(i)
 
-			# Scaling action sequence by some factor.             
-			scaled_action_sequence = self.args.action_scale_factor*action_sequence
-
-			# return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2))
-			return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2)), data_element
+		return
 
 	def get_trajectory_segment(self, i):
-		
-		print("in PM_BatchPretrain get_trajectory_segment func !!!")
-		print("in PM_BatchPretrain get_trajectory_segment func !!!")
-		print("in PM_BatchPretrain get_trajectory_segment func !!!")
+		if self.args.debug:
+			print("in PM_BatchPretrain get_trajectory_segment func !!!")
+			print("in PM_BatchPretrain get_trajectory_segment func !!!")
+			print("in PM_BatchPretrain get_trajectory_segment func !!!")
 
 		if self.args.data in global_dataset_list:
 
@@ -432,6 +355,51 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 		return latent_z_indices, latent_b	
 		# return latent_z_indices
+
+
+
+
+
+	def concat_state_action(self, sample_traj, sample_action_seq):
+		# Add blank to start of action sequence and then concatenate. 
+		sample_action_seq = np.concatenate([np.zeros((self.args.batch_size,1,self.output_size)),sample_action_seq],axis=1)
+
+		# Currently returns: 
+		# s0, s1, s2, s3, ..., sn-1, sn
+		#  _, a0, a1, a2, ..., an_1, an
+		return np.concatenate([sample_traj, sample_action_seq],axis=-1)
+
+	def old_concat_state_action(self, sample_traj, sample_action_seq):
+		sample_action_seq = np.concatenate([sample_action_seq, np.zeros((self.args.batch_size,1,self.output_size))],axis=1)
+		return np.concatenate([sample_traj, sample_action_seq],axis=-1)
+		
+	def get_batch_element(self, i):
+
+		# Make data_element a list of dictionaries. 
+		data_element = []
+						
+		# for b in range(min(self.args.batch_size, len(self.index_list) - i)):
+		# Changing this selection, assuming that the index_list is corrected to only have within dataset length indices.
+		for b in range(self.args.batch_size):
+
+			# print("Index that the get_batch_element is using: b:",b," i+b: ",i+b, self.index_list[i+b])
+			# Because of the new creation of index_list in random shuffling, this should be safe to index dataset with.
+
+			# print("Getting data element, b: ", b, "i+b ", i+b, "index_list[i+b]: ", self.index_list[i+b])
+			index = self.index_list[ (i+b) % len(self.dataset) ]
+
+			if self.args.train:
+				self.coverage[index] += 1
+			data_element.append(self.dataset[index])
+
+		return data_element
+
+
+
+
+
+
+
 
 	def rollout_visuals(self, i, latent_z=None, return_traj=False, rollout_length=None, traj_start=None):
 

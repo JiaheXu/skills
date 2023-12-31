@@ -316,8 +316,11 @@ def parse_arguments():
 
 	parser.add_argument('--use_wandb',dest='use_wandb',type=int,default=1,help='Whether or not we are using wandb')
 
+	parser.add_argument('--cluster_points',dest='cluster_points',type=int,default=500,help='number of points used for clustering')
 
 	parser.add_argument('--test_set_size',dest="test_set_size",type=int,default=0,help='test_set_size')
+	parser.add_argument('--test_len_pertask',dest="test_len_pertask",type=int,default=5,help='test_len_pertask')
+	parser.add_argument('--test_length',dest="test_length",type=int,default=14,help='test_len_per_seg')
 	return parser.parse_args()
 
 def main(args):

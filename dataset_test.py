@@ -1,35 +1,60 @@
-# YUZU
+from Utils.headers import *
+from Datasets import DataLoaders, DAPG_DataLoader, DexMV_DataLoader, RealWorldRigid_DataLoader, MAGI_DataLoader
 
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
+from PolicyManagers.BatchPretrain import PolicyManager_BatchPretrain
+# import TestClass
+# import faulthandler
 
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
 
-from headers import *
-import DataLoaders,  DAPG_DataLoader, DexMV_DataLoader, RealWorldRigid_DataLoader
 
-import MAGI_DataLoader
-
-from PolicyManagers import *
-import TestClass
-import faulthandler
-
-f = open("SegFDebug2.txt","w+")
-faulthandler.enable(f)
-
-def return_dataset(args, data="MAGIPreproc", create_dataset_variation=False):
+def return_dataset(args, data=None, create_dataset_variation=False):
 	
 	# The data parameter overrides the data in args.data. 
 	# This is so that we can call return_dataset with source and target data for transfer setting.
-	dataset = None
-	if data in ["MAGIPreproc"]:
+	# print("args.data: ", args.data)
+	if data is not None:
 		args.data = data
+	
+	elif args.data in ["MAGIPreproc"]:
 		dataset = MAGI_DataLoader.MAGI_PreDataset( args )
-	if data in ["MAGI"]:
-		args.data = data
+	elif args.data in ["MAGI"]:
 		dataset = MAGI_DataLoader.MAGI_Dataset( args )
-	return dataset		
+
+	return dataset
+
+class Master():
+
+	def __init__(self, arguments):
+		self.args = arguments 
+
+		print("Creating Datasets")			
+		self.dataset = return_dataset(self.args, create_dataset_variation=self.args.dataset_variation)
+
+		# if self.args.setting=='pretrain_sub':
+		# 	self.policy_manager = PolicyManager_BatchPretrain(self.dataset, self.args)
+
+		# if self.args.debug:
+		# 	print("Embedding in Master.")
+		# 	embed()
+			
+		# # Create networks and training operations. 
+		# self.policy_manager.setup()
+
+	def run(self):
+		if self.args.setting in ['pretrain_sub']:
+			if self.args.train:
+				if self.args.model:
+					self.policy_manager.train(self.args.model)
+				else:
+					self.policy_manager.train()
+			else:			
+				self.policy_manager.evaluate(model=self.args.model)		
+
+	def test(self):
+		if self.args.test_code:
+			loader = TestClass.TestLoaderWithKwargs()
+			suite = loader.loadTestsFromTestCase(TestClass.MetaTestClass, policy_manager=self.policy_manager)
+			unittest.TextTestRunner().run(suite)
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Learning Skills from Demonstrations')
@@ -282,47 +307,34 @@ def parse_arguments():
 	parser.add_argument('--z_tuple_gmm',dest='z_tuple_gmm',type=int,default=0,help='Whether to use a Z Tuple GMM or not.')
 	parser.add_argument('--z_gmm',dest='z_gmm',type=int,default=0,help='Whether to use a Z GMM or not.')
 
-	# Wasserstein GAN
-	parser.add_argument('--wasserstein_gan',dest='wasserstein_gan',type=int,default=0,help='Whether to implement Wasserstein GAN or not.')
-	parser.add_argument('--lsgan',dest='lsgan',type=int,default=0,help='Whether to implement LSGAN or not.')
-	parser.add_argument('--gradient_penalty',dest='gradient_penalty',type=int,default=0,help='Whether to implement Wasserstein GAN gradient penalty or not.')
-	parser.add_argument('--gradient_penalty_weight',dest='gradient_penalty_weight',type=float,default=10.,help='Relative weight of the Wasserstein discriminator gradient penalty.')
-	parser.add_argument('--wasserstein_discriminator_clipping',dest='wasserstein_discriminator_clipping',type=int,default=0,help='Whether to apply clipping of discriminator parameters.')
-	parser.add_argument('--wasserstein_discriminator_clipping_value',dest='wasserstein_discriminator_clipping_value',type=float,default=0.01,help='Value to apply clipping of discriminator parameters.')
-	parser.add_argument('--identity_translation_loss_weight',dest='identity_translation_loss_weight',type=float,default=0.,help='Weight associated with the regularization of translation model to identity for source zs.')
-
 	# Task ID based discriminability
 	parser.add_argument('--task_discriminability',dest='task_discriminability',type=int,default=0,help='Whether or not to implement task based discriminability.')
 	parser.add_argument('--number_of_tasks',dest='number_of_tasks',type=int,default=0,help='Number of tasks to be considered in task based discriminability.')
 	parser.add_argument('--task_discriminability_loss_weight',dest='task_discriminability_loss_weight',type=float,default=0.,help='Loss weight associated with task based discriminability.')
 	parser.add_argument('--task_discriminator_weight',dest='task_discriminator_weight',type=float,default=0.,help='Loss weight associated with task discriminator(s)')
 	parser.add_argument('--task_based_supervision',dest='task_based_supervision',type=int,default=0,help='Whether or not we are using task based supervision.')
+
+	parser.add_argument('--use_wandb',dest='use_wandb',type=int,default=1,help='Whether or not we are using wandb')
+
+	parser.add_argument('--cluster_points',dest='cluster_points',type=int,default=500,help='number of points used for clustering')
+
+	parser.add_argument('--test_set_size',dest="test_set_size",type=int,default=0,help='test_set_size')
 	
-	parser.add_argument('--pure_supervision',dest='pure_supervision',type=int,default=0,help='Whether or not to use pure supervision and ignore unsupervised losses.')
-	parser.add_argument('--task_based_supervised_loss_weight',dest='task_based_supervised_loss_weight',type=float,default=0.,help='Loss weight associated with the task based supervised loss.')
-
-	# Parameters for contextual training. 
-	parser.add_argument('--mask_fraction',dest='mask_fraction',type=float,default=0.15,help='What fraction of zs to mask in contextual embedding.')
-	parser.add_argument('--context',dest='context',type=int,default=0,help='Whether to implement contextual embedding model or original joint embedding model in Joint Transfer setting.')
-	parser.add_argument('--new_context',dest='new_context',type=int,default=1,help='Whether to implement new contextual embedding model or original one.')
-	parser.add_argument('--ELMO_embeddings',dest='ELMO_embeddings',type=int,default=0,help='Whether to implement ELMO style embeddings.')
-	parser.add_argument('--eval_transfer_metrics',dest='eval_transfer_metrics',type=int,default=0,help='Whether to evaluate correspondence metrics in transfer setting.')
-
-	# Parameters for downstream PPO. 
-	parser.add_argument('--rl_policy_learning_rate', dest='rl_policy_learning_rate', type=float, default=3e-4, help='Learning rate for RL Policy.')
-	parser.add_argument('--rl_critic_learning_rate', dest='rl_critic_learning_rate', type=float, default=1e-3, help='Learning rate for RL Critic.')
-	parser.add_argument('--target_KL',dest='target_KL',type=float,default=0.01,help='Target KL value.')
-	parser.add_argument('--finetune_method',dest='finetune_method',type=str,default=None,choices=[None,'AdaptZ','FullRL','EE'],help='What type of finetuning auxilliary reward to use.')
-	parser.add_argument('--auxilliary_reward_weight',dest='auxilliary_reward_weight',type=float,default=0.,help='Weight associated with the auxilliary reward weight.')
-	parser.add_argument('--finetune_epochs',dest='finetune_epochs',type=int,default=10,help='Number of episodes / epochs to finetune RL for.')
-	parser.add_argument('--finetune_eval_freq',dest='finetune_eval_freq',type=int,default=10,help='Frequency of evaluation.')
-
 	return parser.parse_args()
 
 def main(args):
-	args = parse_arguments()	
-	dataset = return_dataset(args, create_dataset_variation=args.dataset_variation)
 
+	args = parse_arguments()
+	master = Master(args)
+
+	# if( args.use_wandb ):
+	# 	wandb.init(project=args.setting, dir=args.logdir, name=args.name)
+	# 	wandb.config.update(args)
+	# master.run()
+	# print("done !!!")
+	# print("done !!!")
+	# print("done !!!")
+	
 if __name__=='__main__':
 	main(sys.argv)
 

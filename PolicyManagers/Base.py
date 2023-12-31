@@ -57,6 +57,8 @@ class PolicyManager_BaseClass():
 			
 		self.rollout_timesteps = self.traj_length
 
+		self.N = (self.args.cluster_points // self.args.batch_size ) * self.args.batch_size # round down to make life easier
+
 		if self.args.normalization=='meanvar':
 			self.norm_sub_value = np.load("Statistics/{0}/{0}_Mean.npy".format(stat_dir_name))
 			self.norm_denom_value = np.load("Statistics/{0}/{0}_Var.npy".format(stat_dir_name))
@@ -86,9 +88,10 @@ class PolicyManager_BaseClass():
 
 	def train(self, model=None):
 
-		print("Running Main Train Function. !!!")
-		print("Running Main Train Function. !!!")
-		print("Running Main Train Function. !!!")
+		if self.args.debug:
+			print("Running Main Train Function. !!!")
+			print("Running Main Train Function. !!!")
+			print("Running Main Train Function. !!!")
 
 		# (1) Load Model If Necessary
 		if model:
@@ -114,8 +117,7 @@ class PolicyManager_BaseClass():
 				embed()
 
 			self.current_epoch_running = e
-			print("Starting Epoch: ",e)
-
+			# print("Starting Epoch: ",e)
 
 			# (4b) Set extent of dataset. 
 			# Modifying to make training functions handle batches. 
@@ -123,7 +125,6 @@ class PolicyManager_BaseClass():
 
 			# (4c) Shuffle based on extent of dataset. 					
 			self.shuffle(extent)
-			# print(" self.index_list: ", len(self.index_list))
 
 			self.batch_indices_sizes = []
 
@@ -163,48 +164,28 @@ class PolicyManager_BaseClass():
 		#	# Plot rollout.
 		# Embed plots. 
 
-		# Set N:
-		self.N = 500
-
 		self.latent_z_set = np.zeros((self.N,self.latent_z_dimensionality))
-			
 		self.trajectory_set = []
-		# self.gt_trajectory_set = np.zeros((self.N, self., self.state_dim))
-		
 		self.gt_trajectory_set = []
-		 
 		self.task_id_set = []
 
 		# Use the dataset to get reasonable trajectories (because without the information bottleneck / KL between N(0,1), cannot just randomly sample.)
-		# # for i in range(self.N//self.args.batch_size+1, 32)
-		# for i in range(0, self.N, self.args.batch_size):
-		for i in range(self.N//self.args.batch_size+1):
-
+		for i in range( self.N//self.args.batch_size ):
 			# Mapped index
-			number_batches_for_dataset = (len(self.dataset)//self.args.batch_size)+1
+			number_batches_for_dataset = len(self.dataset) // self.args.batch_size
 			j = i % number_batches_for_dataset
 
-			########################################
 			# (1) Encoder trajectory. 
-			########################################
-
 			latent_z, sample_trajs, _, data_element = self.run_iteration(0, j*self.args.batch_size, return_z=True, and_train=False)
 
-			########################################
 			# Iterate over items in the batch.
-			########################################
-			# print("Embed in latent set creation")
-			# embed()
-
 			for b in range(self.args.batch_size):
-
 				if self.args.batch_size*i+b>=self.N:
 					break
 
 				self.latent_z_set[i*self.args.batch_size+b] = copy.deepcopy(latent_z[0,b].detach().cpu().numpy())
-				# self.latent_z_set[i+b] = copy.deepcopy(latent_z[0,b].detach().cpu().numpy())
+	
 				self.gt_trajectory_set.append(copy.deepcopy(sample_trajs[:,b]))
-				
 				self.task_id_set.append(data_element[b]['task-id'])
 
 				if get_visuals:
@@ -216,23 +197,14 @@ class PolicyManager_BaseClass():
 						self.trajectory_set.append(self.rollout_visuals(i, latent_z=latent_z[0,b], return_traj=True, traj_start=sample_trajs[0,b], rollout_length=sample_trajs.shape[0]))
 					else:
 						self.trajectory_set.append(self.rollout_visuals(i, latent_z=latent_z[0,b], return_traj=True, traj_start=sample_trajs[0,b]))
-			
-			if self.args.batch_size*i+b>=self.N:
-				break
-
-		# print("Embed in latent set creation before trajectory error evaluation.")
-		# embed()
 
 		# Compute average reconstruction error.
 		if get_visuals:
+			
 			self.gt_traj_set_array = np.array(self.gt_trajectory_set, dtype=object)
 			self.trajectory_set = np.array(self.trajectory_set, dtype=object)
-
-			# self.gt_traj_set_array = np.array(self.gt_trajectory_set)
-			# self.trajectory_set = np.array(self.trajectory_set)
-
-			# self.avg_reconstruction_error = (self.gt_traj_set_array-self.trajectory_set).mean()
 			self.reconstruction_errors = np.zeros(len(self.gt_traj_set_array))
+
 			for k in range(len(self.reconstruction_errors)):
 				self.reconstruction_errors[k] = ((self.gt_traj_set_array[k]-self.trajectory_set[k])**2).mean()
 			self.avg_reconstruction_error = self.reconstruction_errors.mean()
@@ -429,6 +401,8 @@ class PolicyManager_BaseClass():
 			self.embedded_z_dict['perp5'] = self.get_robot_embedding(perplexity=5) #!!! here
 			self.embedded_z_dict['perp10'] = self.get_robot_embedding(perplexity=10)
 			self.embedded_z_dict['perp30'] = self.get_robot_embedding(perplexity=30)
+			self.embedded_z_dict['perp50'] = self.get_robot_embedding(perplexity=50)
+			self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
 
 			# Save embedded z's and trajectory and latent sets.
 			self.save_latent_sets(stat_dictionary)
@@ -438,37 +412,28 @@ class PolicyManager_BaseClass():
 			image_perp5 = self.plot_embedding(self.embedded_z_dict['perp5'], title="Z Space {0} Perp 5".format(statistics_line)) #!!! here
 			image_perp10 = self.plot_embedding(self.embedded_z_dict['perp10'], title="Z Space {0} Perp 10".format(statistics_line))
 			image_perp30 = self.plot_embedding(self.embedded_z_dict['perp30'], title="Z Space {0} Perp 30".format(statistics_line))
-			
+			image_perp50 = self.plot_embedding(self.embedded_z_dict['perp50'], title="Z Space {0} Perp 50".format(statistics_line))
+			image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space {0} Perp 100".format(statistics_line))
+
 			# Now adding image visuals to the wandb logs.
 			log_dict["Embedded Z Space Perplexity 5"] = self.return_wandb_image(image_perp5)
 			log_dict["Embedded Z Space Perplexity 10"] =  self.return_wandb_image(image_perp10)
 			log_dict["Embedded Z Space Perplexity 30"] =  self.return_wandb_image(image_perp30)
-	
+			log_dict["Embedded Z Space Perplexity 50"] =  self.return_wandb_image(image_perp50)
+			log_dict["Embedded Z Space Perplexity 100"] =  self.return_wandb_image(image_perp100)
+
 		if( self.args.use_wandb ):
 			wandb.log(log_dict, step=counter)
 
 	def visualize_robot_embedding(self, scaled_embedded_zs, gt=False):
 
-		# Create figure and axis objects
-		# matplotlib.rcParams['figure.figsize'] = [8, 8]
-		# zoom_factor = 0.04
-
-		# # Good low res parameters: 
-		# matplotlib.rcParams['figure.figsize'] = [8, 8]
-		# zoom_factor = 0.04
-
 		# Good spaced out highres parameters: 
 		matplotlib.rcParams['figure.figsize'] = [40, 40]			
-		# zoom_factor = 0.3
 		zoom_factor=0.25
 
 		# Set this parameter to make sure we don't drop frames.
 		matplotlib.rcParams['animation.embed_limit'] = 2**128
-			
-		
 		fig, ax = plt.subplots()
-
-		# number_samples = 400
 		number_samples = self.N		
 
 		# Create a scatter plot of the embedding itself. The plot does not seem to work without this. 
@@ -536,10 +501,10 @@ class PolicyManager_BaseClass():
 			return scaled_embedded_zs
 
 	def get_robot_visuals(self, i, latent_z, trajectory, return_image=False, return_numpy=False, z_seq=False, indexed_data_element=None, segment_indices=None): #!!! here
-
-		print("We are in the PM_Base get_robot_visuals func !!!")
-		print("We are in the PM_Base get_robot_visuals func !!!")
-		print("We are in the PM_Base get_robot_visuals func !!!")
+		if self.args.debug:
+			print("in the PM_Base get_robot_visuals func !!!")
+			print("in the PM_Base get_robot_visuals func !!!")
+			print("in the PM_Base get_robot_visuals func !!!")
 
 		########################################
 		# 1) Get task ID. 
@@ -870,8 +835,8 @@ class PolicyManager_BaseClass():
 				self.encoder_network.load_state_dict(load_object['Encoder_Network'])
 
 	def set_epoch(self, counter):
-		if self.args.train:
 
+		if self.args.train:
 			# Annealing epsilon and policy variance.
 			if counter<self.decay_counter:
 				self.epsilon = self.initial_epsilon-self.decay_rate*counter
@@ -892,12 +857,8 @@ class PolicyManager_BaseClass():
 		else:
 			self.epsilon = self.final_epsilon
 			# self.policy_variance_value = self.args.final_policy_variance
-			
 			# Default variance value, but this shouldn't really matter... because it's in test / eval mode.
 			self.policy_variance_value = self.args.variance_value
-		
-		# print("embed in set epoch")
-		# embed()
 
 		# Set KL weight. 
 		self.set_kl_weight(counter)		
@@ -923,8 +884,6 @@ class PolicyManager_BaseClass():
 			if counter<self.kl_begin_increment_counter:
 				self.kl_weight = self.args.initial_kl_weight				
 			else: 			
-
-				
 				# While cycling, self.kl_phase_length_counter is the number of iterations over which we repeat. 
 				# self.kl_increment_counter is the iterations (within a cycle) over which we increment KL to maximum.
 				# Get where in a single cycle it is. 
@@ -936,11 +895,9 @@ class PolicyManager_BaseClass():
 				# Otherwise, do the incremene.t 
 				else:
 					self.kl_weight = self.args.initial_kl_weight + self.kl_increment_rate*kl_counter		
-		
 		# No Schedule. 
 		else:
 			self.kl_weight = self.args.kl_weight
-		# Adding branch for cyclic KL weight.	
 
 	def save_latent_sets(self, stats):
 
@@ -1083,11 +1040,10 @@ class PolicyManager_BaseClass():
 		# Need to perform the same manipulation of segment indices that we did in the forward function call.		
 
 	def visualize_robot_data(self, load_sets=False, number_of_trajectories_to_visualize=None):
-
-		
-		print("in PM_Base visualize_robot_data func !!!")
-		print("in PM_Base visualize_robot_data func !!!")
-		print("in PM_Base visualize_robot_data func !!!")
+		if self.args.debug:
+			print("in PM_Base visualize_robot_data func !!!")
+			print("in PM_Base visualize_robot_data func !!!")
+			print("in PM_Base visualize_robot_data func !!!")
 		
 		if number_of_trajectories_to_visualize is not None:
 			self.N = number_of_trajectories_to_visualize
@@ -1750,27 +1706,7 @@ class PolicyManager_BaseClass():
 		# Do a dry run of 1 epoch, before we actually start running training. 
 		# This is so that we can figure out the batch of 1 epoch.
 		 		
-		self.shuffle(extent,shuffle=False)		
-
-		# Can now skip this entire block, because we've sorted data according to trajectory length.
-		# #########################################################
-		# #########################################################
-		# for i in range(0,extent,self.args.batch_size):		
-		# 	# Dry run iteration. 
-		# 	self.run_iteration(counter, self.index_list[i], skip_iteration=True)
-
-		# print("About to find max batch size index.")
-		# # Now find maximum batch size iteration. 
-		# self.max_batch_size_index = 0
-		# self.max_batch_size = 0
-		# # traj_lengths = []
-
-		# for x in range(len(self.batch_indices_sizes)):
-		# 	if self.batch_indices_sizes[x]['batch_size']>self.max_batch_size:
-		# 		self.max_batch_size = self.batch_indices_sizes[x]['batch_size']
-		# 		self.max_batch_size_index = self.batch_indices_sizes[x]['i']
-		# #########################################################
-		# #########################################################
+		self.shuffle(extent,shuffle=False)
 
 		self.max_batch_size_index = 0
 		if self.args.data in ['ToyContext','ContinuousNonZero']:
@@ -1780,16 +1716,6 @@ class PolicyManager_BaseClass():
 								
 		print("About to run max batch size iteration.")
 		print("This batch size is: ", self.max_batch_size)
-
-		# #########################################################
-		# #########################################################
-		# # Now run another epoch, where we only skip iteration if it's the max batch size.
-		# for i in range(0,extent,self.args.batch_size):
-		# 	# Skip unless i is ==max_batch_size_index.
-		# 	skip = (i!=self.max_batch_size_index)
-		# 	self.run_iteration(counter, self.index_list[i], skip_iteration=skip)
-		# #########################################################
-		# #########################################################
 
 		# Instead of this clumsy iteration, just run iteration with i=0. 
 		self.run_iteration(counter, 0, skip_iteration=0, train=False)

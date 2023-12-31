@@ -25,8 +25,9 @@ from math import sqrt
 
 from scipy.spatial import KDTree
 
-file_path = "/home/mmpug/CausalSkillLearning/TrainingLogs/MAGI_1224_test/MEval/m100000/NumpyZs/ALL_Latent_Z.npy"
+cumulative_num_demos = np.load("./data/MAGI/MAGI_Lengths.npy", allow_pickle=True)
 
+file_path = "/home/mmpug/CausalSkillLearning/TrainingLogs/MAGI_1224_test/MEval/m100000/NumpyZs/ALL_Latent_Z.npy"
 test_latent_z_sets = np.load(file_path, allow_pickle=True)
 print("test_latent_z_sets: ", len(test_latent_z_sets))
 
@@ -41,19 +42,14 @@ for i in range(len(test_latent_z_sets)):
 	if(i == 0):
 		test_set = test_latent_z_sets[i].copy()
 	else:
-		# print("test_set: ", test_set.shape)
-		# print("latent_z_sets[i]: ", latent_z_sets[i].shape)
 		test_set = np.concatenate( (test_set, test_latent_z_sets[i] ))
 print("traj_length: ", traj_length)
 print("test_set: ", test_set.shape)
 
-file_path2 = "/home/mmpug/CausalSkillLearning/TrainingLogs/MAGI_1224/LatentSetDirectory/E100000_C100000"
+file_path2 = "/home/mmpug/skills/TrainingLogs/skills_MAGI_1230/LatentSetDirectory/E2000_C4000"
 latent_z_set = np.load(os.path.join(file_path2, "LatentSet.npy"))
 
 print("latent_z_set: ", latent_z_set.shape)
-# print("gt_trajectory_set: ", gt_trajectory_set.shape)
-# print("embedded_zs: ", embedded_zs.shape)
-# print("task_id_set: ", task_id_set.shape)
 
 def get_robot_embedding(return_tsne_object=False, perplexity=None): #!!! here
 	normed_z = latent_z_set #!!! here
@@ -141,23 +137,19 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
         ax.add_patch(Ellipse(position, nsig * width, nsig * height,
                              angle, **kwargs))
         
-def plot_gmm(gmm, X, label=True, ax=None):
-	# ax = ax or plt.gca()
+def plot_gmm(X, labels, ax=None):
+
 	fig, ax = plt.subplots(1, 1, figsize=(1.61803398875*4, 4))
 	ax.set_facecolor("#bbbbbb")
 	ax.set_xlabel("Dimension 1")
 	ax.set_ylabel("Dimension 2")
 
-	labels = gmm.fit(X).predict(X)
-	if label:
-	    ax.scatter(X[:, 0], X[:, 1], c=labels, s=40, cmap='viridis', zorder=2)
-	else:
-		ax.scatter(X[:, 0], X[:, 1], s=40, zorder=2)
+	ax.scatter(X[:, 0], X[:, 1], c=labels, s=40, cmap='viridis', zorder=2)
 	ax.axis('equal')
     
-	w_factor = 0.2 / gmm.weights_.max()
-	for pos, covar, w in zip(gmm.means_, gmm.covariances_, gmm.weights_):
-		draw_ellipse(pos, covar, alpha=w * w_factor)
+	# w_factor = 0.2 / gmm.weights_.max()
+	# for pos, covar, w in zip(gmm.means_, gmm.covariances_, gmm.weights_):
+		# draw_ellipse(pos, covar, alpha=w * w_factor)
 	legend = ax.legend(loc="best")
 
 	plt.tight_layout()
@@ -170,13 +162,21 @@ embedded_z_dict['perp30'] = get_robot_embedding(perplexity=30)
 
 # print("embedded_z_dict['perp5']: ", embedded_z_dict['perp5'].size())
 
-data = torch.from_numpy( embedded_z_dict['perp10'] )
-n_components = 3
+data = torch.from_numpy( embedded_z_dict['perp5'] )
+n_components = 2
 d = 2
 model = mixture.GaussianMixture(n_components, covariance_type='full').fit(data)
 
 labels = model.predict(data)
-plot_gmm(model, data)
+
+for i in range(labels.shape[0]):
+	if(data[i][0] < 55.0):
+		labels[i] = 0
+	else:
+		labels[i] = 1
+plot_gmm(data, labels)
+
+
 
 kdtree = KDTree(latent_z_set)
 number_neighbors = 1
@@ -184,12 +184,13 @@ z_neighbor_distances, z_neighbors_indices = kdtree.query( test_set ,p = 2, k=num
 print("z_neighbors_indices: ", len(z_neighbors_indices) )
 z_neighbors_indices = np.array(z_neighbors_indices)
 
+
+
+print("cumulative_num_demos: ", cumulative_num_demos)
 count = 0
-for i in range( len(traj_length) ):
-	if(i%10 == 0):
-		print( "task: ", i//10 )
-	for j in range(traj_length[i]):
-		print(labels[ z_neighbors_indices[count] ], end = "")
-		count += 1
-	print("\n")
-			
+for i in range(1, len(cumulative_num_demos) ):
+	print( "task: ", i)
+	for j in range(cumulative_num_demos[i-1], cumulative_num_demos[i]):
+		for k in range(traj_length[j]):
+			print(labels[ z_neighbors_indices[count] ], end = "")
+		print("")
