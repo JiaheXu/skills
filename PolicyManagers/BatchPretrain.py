@@ -34,6 +34,8 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		self.quadratic_variance_decay_rate = (self.args.initial_policy_variance - self.args.final_policy_variance)/(self.variance_decay_counter**2)
 
 		self.state_trajectory_test = None
+		self.latent_z_test = None
+		self.latent_z_task_id_test = []
 
 	def create_networks(self):
 		
@@ -137,7 +139,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 	def run_evaluate_iteration(self, i): 
 		# return_z=True, and_train=False) for evaluate
 		# self.run_iteration(counter, i) for train
-		if self.args.debug:
+		if self.args.debug_evaluate:
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
@@ -154,52 +156,99 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		
 		torch_traj_seg = torch.tensor(state_action_trajectory_test).to(device).float()	
 		latent_z, encoder_loglikelihood, encoder_entropy, kl_divergence = self.encoder_network.forward(torch_traj_seg, 0.0) #!!!!!!!! here
-		latent_z = latent_z.detach().cpu().numpy()
+		latent_z = latent_z.detach().cpu().numpy().squeeze()
 		
-		print("evaluate latent shape: ", latent_z.shape)
-		print("evaluate latent shape: ", latent_z.shape)
-		print("evaluate latent shape: ", latent_z.shape)
+		if self.args.debug_evaluate:
+			print("evaluate latent shape: ", latent_z.shape)
+			print("evaluate latent shape: ", latent_z.shape)
+			print("evaluate latent shape: ", latent_z.shape)
+		
+		return latent_z
 
-		# update_dict = input_dict
-		# update_dict['latent_z'] = latent_z
-		return 
 
-
-	def get_all_segment(self, data_element):
+	def get_all_segment(self, data_element, task_id):
+		print("task_id: ", task_id)
 		traj = []
-		for start_time in range(0, data_element['demo'].shape[0] - self.args.test_length, self.args.test_length ):
+		for start_time in range(0, data_element['demo'].shape[0] - self.args.test_length + 1, self.args.test_length ):
 			end_time = start_time + self.args.test_length
-			if(end_time >= data_element['demo'].shape[0]):
+			if(end_time > data_element['demo'].shape[0]):
 				break
 			traj.append( data_element['demo'][start_time: end_time] )
+			self.latent_z_task_id_test.append(task_id)
 		traj = np.array(traj)
+		if(self.args.debug_evaluate):
+			print("demo length: ", data_element['demo'].shape[0] // self.args.test_length)
+			print("traj: ", traj.shape[0])
 		return traj
 
 	def get_evaluate_data(self):
+
 		trajectory = None
 		for i in range( len(self.dataset.filelist) ):
 			for j in range( self.args.test_len_pertask ):
 				idx = self.dataset.cumulative_num_demos[i] + j
 				if (trajectory is None):
-					trajectory = self.get_all_segment( self.dataset[idx] )
+					trajectory = self.get_all_segment( self.dataset[idx] , idx)
 				else:
-					trajectory = np.concatenate( (trajectory, self.get_all_segment(self.dataset[idx]) )  )
+					trajectory = np.concatenate( (trajectory, self.get_all_segment(self.dataset[idx], idx) )  )
 				# print("trajectory: ", trajectory)
+		
+		end_idx = ( (trajectory.shape[0]+self.args.batch_size-1) // self.args.batch_size ) * self.args.batch_size
+		trajectory = np.pad(trajectory, ((0, end_idx - trajectory.shape[0]), (0,0), (0,0)), "edge")
 
-		end_idx = ( trajectory.shape[0] // self.args.batch_size ) * self.args.batch_size
+		self.latent_z_task_id_test = np.array(self.latent_z_task_id_test)
+		self.latent_z_task_id_test = np.pad(self.latent_z_task_id_test, ((0, end_idx - trajectory.shape[0])), "edge")
+
 		self.state_trajectory_test = trajectory[0: end_idx]
+		self.latent_z_task_id_test = self.latent_z_task_id_test[0: end_idx] 
+		return
+	
+	def get_evaluate_latent_z(self):
+		self.latent_z_test = None # clear the stack
+		for i in range( self.state_trajectory_test.shape[0]//self.args.batch_size ):
+			latent_z = self.run_evaluate_iteration(i)
+			if(self.latent_z_test is None ):
+				self.latent_z_test = latent_z
+			else:
+				self.latent_z_test = np.concatenate( (self.latent_z_test, latent_z) )
+		return
+	
+	def save_latent_z(self, latent_z = None, save_latent_z_title = None):
 
+		if(latent_z is None):
+			print(" latent_z is None !!!!")
+			print(" latent_z is None !!!!")
+			print(" latent_z is None !!!!")
+			return
+		self.z_dir_name = os.path.join(self.dir_name, "Latent_Z")
+		if not(os.path.isdir(self.z_dir_name)):
+			os.mkdir(self.z_dir_name)
+
+		if(save_latent_z_title is not None):
+			file_pth = os.path.join( self.z_dir_name, "{0}.npy".format(save_latent_z_title) )
+			np.save( file_pth, latent_z)
+			print("file_pth: ", file_pth)
+			print("file_pth: ", file_pth)
+			print("file_pth: ", file_pth)
+			print("latent_z: ", latent_z.shape)
+			print("latent_z: ", latent_z.shape)
+			print("latent_z: ", latent_z.shape)
+			print("task id: ", self.latent_z_task_id_test)
 
 		return
 
-	def evaluate(self, model=None):
+	def evaluate(self, model=None, save_latent_z_title = None):
 		if model:
 			print("Loading model in evaluating.")
 			self.load_all_models(model)	
-		self.get_evaluate_data() #concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
-		for i in range( self.state_trajectory_test.shape[0]//self.args.batch_size ):
-			self.run_evaluate_iteration(i)
-
+		if self.state_trajectory_test is None:
+			self.get_evaluate_data() #concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
+		if self.latent_z_test is None:
+			self.get_evaluate_latent_z()
+		if save_latent_z_title is not None:
+			self.save_latent_z( self.latent_z_test, save_latent_z_title)
+		else:
+			self.save_latent_z( self.latent_z_test, "latent_z_test")
 		return
 
 	def get_trajectory_segment(self, i):

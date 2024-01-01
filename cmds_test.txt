@@ -290,4 +290,6 @@ CUDA_VISIBLE_DEVICES=0 python3 master.py \
  --logdir=/ws/skills/TrainingLogs/ \
  --datadir=/ws/skills/data/MAGI \
  --use_wandb=0 \
+ --debug=0 \
+ --debug_evaluate=1 \
  --model=/ws/skills/TrainingLogs/skills_MAGI_1230/saved_models/Model_epoch2000
