@@ -35,7 +35,10 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 		self.state_trajectory_test = None
 		self.latent_z_test = None
-		self.latent_z_task_id_test = []
+		self.latent_z_demo_id_test = []
+		self.demo_test = []
+		self.demo_latent_z_test = []
+		self.original_test_length = 0
 
 	def create_networks(self):
 		
@@ -145,13 +148,13 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 
 		state_action_trajectory = self.state_trajectory_test[i*self.args.batch_size: (i+1)*self.args.batch_size]
-		print("state_action_trajectory: ", state_action_trajectory.shape)
+		# print("state_action_trajectory: ", state_action_trajectory.shape)
 		action_sequence = np.diff(state_action_trajectory,axis=1)
 		# print("trajectory: ", trajectory.shape)
 		# print("action_sequence: ", action_sequence.shape)
 		state_action_trajectory_test = self.concat_state_action(state_action_trajectory, action_sequence)
 
-		print("state_action_trajectory_test: ", state_action_trajectory_test.shape)
+		# print("state_action_trajectory_test: ", state_action_trajectory_test.shape)
 		state_action_trajectory_test = state_action_trajectory_test.transpose((1,0,2))
 		
 		torch_traj_seg = torch.tensor(state_action_trajectory_test).to(device).float()	
@@ -166,15 +169,15 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		return latent_z
 
 
-	def get_all_segment(self, data_element, task_id):
-		print("task_id: ", task_id)
+	def get_all_segment(self, data_element, demo_id):
+		# print("task_id: ", task_id)
 		traj = []
 		for start_time in range(0, data_element['demo'].shape[0] - self.args.test_length + 1, self.args.test_length ):
 			end_time = start_time + self.args.test_length
 			if(end_time > data_element['demo'].shape[0]):
 				break
 			traj.append( data_element['demo'][start_time: end_time] )
-			self.latent_z_task_id_test.append(task_id)
+			self.latent_z_demo_id_test.append(demo_id)
 		traj = np.array(traj)
 		if(self.args.debug_evaluate):
 			print("demo length: ", data_element['demo'].shape[0] // self.args.test_length)
@@ -184,23 +187,28 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 	def get_evaluate_data(self):
 
 		trajectory = None
+		self.demo_test.clear()
 		for i in range( len(self.dataset.filelist) ):
+			demo_idx = []
 			for j in range( self.args.test_len_pertask ):
 				idx = self.dataset.cumulative_num_demos[i] + j
+				demo_idx.append(idx)
 				if (trajectory is None):
 					trajectory = self.get_all_segment( self.dataset[idx] , idx)
 				else:
 					trajectory = np.concatenate( (trajectory, self.get_all_segment(self.dataset[idx], idx) )  )
 				# print("trajectory: ", trajectory)
+			self.demo_test.append(demo_idx)
 		
 		end_idx = ( (trajectory.shape[0]+self.args.batch_size-1) // self.args.batch_size ) * self.args.batch_size
 		trajectory = np.pad(trajectory, ((0, end_idx - trajectory.shape[0]), (0,0), (0,0)), "edge")
 
-		self.latent_z_task_id_test = np.array(self.latent_z_task_id_test)
-		self.latent_z_task_id_test = np.pad(self.latent_z_task_id_test, ((0, end_idx - trajectory.shape[0])), "edge")
+		self.original_test_length = self.latent_z_demo_id_test.shape[0]
+		self.latent_z_demo_id_test = np.array(self.latent_z_demo_id_test)
+		self.latent_z_demo_id_test = np.pad(self.latent_z_demo_id_test, ((0, end_idx - trajectory.shape[0])), "edge")
 
 		self.state_trajectory_test = trajectory[0: end_idx]
-		self.latent_z_task_id_test = self.latent_z_task_id_test[0: end_idx] 
+		self.latent_z_demo_id_test = self.latent_z_demo_id_test[0: end_idx] 
 		return
 	
 	def get_evaluate_latent_z(self):
@@ -227,15 +235,34 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		if(save_latent_z_title is not None):
 			file_pth = os.path.join( self.z_dir_name, "{0}.npy".format(save_latent_z_title) )
 			np.save( file_pth, latent_z)
-			print("file_pth: ", file_pth)
-			print("file_pth: ", file_pth)
-			print("file_pth: ", file_pth)
-			print("latent_z: ", latent_z.shape)
-			print("latent_z: ", latent_z.shape)
-			print("latent_z: ", latent_z.shape)
-			print("task id: ", self.latent_z_task_id_test)
-
+			if self.args.debug_evaluate:
+				print("file_pth: ", file_pth)
+				print("latent_z: ", latent_z.shape)
+				print("task id: ", self.latent_z_demo_id_test)
 		return
+	
+	def map_back_test(self):
+		self.demo_test # demos used for test, demo[i][j] mean in task i, jth demo
+		last_demo_id = -1
+		current_stack = []
+		for i in range( self.original_test_length.shape[0] ):
+			if(self.original_test_length[i] != last_demo_id ) or ( i == self.original_test_length.shape[0] - 1 ):
+				latent_array = np.array(current_stack)
+				latent_array = np.repeat(latent_array, self.args.test_length, axis=1)
+				latent_array = np.pad(latent_array, ((0, self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0] - latent_array.shape[0]), (0,0)), "edge")
+				print("datapoint length: ", self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0])
+				self.demo_latent_z_test.append( copy.deepcopy(latent_array) )
+				current_stack.clear()
+			else:
+				current_stack.append(self.latent_z_test[i])			
+			last_demo_id = self.latent_z_demo_id_test[i]
+
+		print("check:")
+		for i in range(len(self.demo_latent_z_test)):
+			print("latent length: ", self.demo_latent_z_test[i].shape[0])
+			
+
+
 
 	def evaluate(self, model=None, save_latent_z_title = None):
 		if model:
@@ -249,6 +276,9 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			self.save_latent_z( self.latent_z_test, save_latent_z_title)
 		else:
 			self.save_latent_z( self.latent_z_test, "latent_z_test")
+		if self.args.map_back:
+			self.map_back_test()
+		
 		return
 
 	def get_trajectory_segment(self, i):
