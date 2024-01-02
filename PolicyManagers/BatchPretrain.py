@@ -144,16 +144,25 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 
-		state_action_trajectory = self.state_trajectory_test[i*self.args.batch_size: (i+1)*self.args.batch_size]
-		print("state_action_trajectory: ", state_action_trajectory.shape)
-		action_sequence = np.diff(state_action_trajectory,axis=1)
-		# print("trajectory: ", trajectory.shape)
-		# print("action_sequence: ", action_sequence.shape)
-		state_action_trajectory_test = self.concat_state_action(state_action_trajectory, action_sequence)
+		batch_trajectory = self.state_trajectory_test[i*self.args.batch_size: (i+1)*self.args.batch_size]
 
-		print("state_action_trajectory_test: ", state_action_trajectory_test.shape)
-		state_action_trajectory_test = state_action_trajectory_test.transpose((1,0,2))
+		# If normalization is set to some value.
+		if self.args.normalization=='meanvar' or self.args.normalization=='minmax':
+			batch_trajectory = (batch_trajectory-self.norm_sub_value)/self.norm_denom_value
+			self.normalized_subsampled_relative_object_state = (self.subsampled_relative_object_state - self.norm_sub_value[-self.args.env_state_size:])/self.norm_denom_value[-self.args.env_state_size:]
+
+			# Compute actions.
+			action_sequence = np.diff(batch_trajectory,axis=1)
+			self.relative_object_state_actions = np.diff(self.normalized_subsampled_relative_object_state, axis=1)
+
+			# Concatenate
+			state_action_trajectory_test = self.concat_state_action(batch_trajectory, action_sequence)
+
+			# Scaling action sequence by some factor.             
+			scaled_action_sequence = self.args.action_scale_factor*action_sequence
 		
+		state_action_trajectory_test = state_action_trajectory_test.transpose((1,0,2))
+
 		torch_traj_seg = torch.tensor(state_action_trajectory_test).to(device).float()	
 		latent_z, encoder_loglikelihood, encoder_entropy, kl_divergence = self.encoder_network.forward(torch_traj_seg, 0.0) #!!!!!!!! here
 		latent_z = latent_z.detach().cpu().numpy().squeeze()
@@ -345,7 +354,6 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			# Scaling action sequence by some factor.             
 			scaled_action_sequence = self.args.action_scale_factor*action_sequence
 
-			# return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2))
 			return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2)), data_element
 
 	def relabel_relative_object_state_actions(self, padded_action_seq):

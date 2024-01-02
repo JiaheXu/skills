@@ -208,6 +208,9 @@ class PolicyManager_BaseClass():
 			for k in range(len(self.reconstruction_errors)):
 				self.reconstruction_errors[k] = ((self.gt_traj_set_array[k]-self.trajectory_set[k])**2).mean()
 			self.avg_reconstruction_error = self.reconstruction_errors.mean()
+			print("avg_reconstruction_error: ", self.avg_reconstruction_error)
+			print("avg_reconstruction_error: ", self.avg_reconstruction_error)
+			print("avg_reconstruction_error: ", self.avg_reconstruction_error)
 		else:
 			self.avg_reconstruction_error = 0.
 
