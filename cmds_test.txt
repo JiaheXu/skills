@@ -221,7 +221,7 @@ train
 CUDA_VISIBLE_DEVICES=0 python3 master.py \
  --train=1 \
  --setting=pretrain_sub \
- --name=skills_MAGI_0101 \
+ --name=skills_MAGI_0102 \
  --data=MAGI \
  --var_skill_length=1 \
  --number_layers=3 \
