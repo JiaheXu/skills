@@ -294,7 +294,7 @@ class MAGI_Dataset(Dataset):
 		self.env_state_dim = self.dims.flat[0]["env_state_dim"]
 
 		self.dataset_length = len(self.data_list)
-
+		self.original_demo_length = []
 		
 
 		# print("self.data_list", self.data_list)
@@ -303,6 +303,8 @@ class MAGI_Dataset(Dataset):
 		print("dataset_length", self.dataset_length)
 
 		for i in range(self.dataset_length):
+			self.original_demo_length.append( self.data_list[i].shape[0] )
+			print("demo length: ", i, " ", self.data_list[i].shape[0])
 			number_of_timesteps = self.data_list[i].shape[0]//self.ds_freq
 			# print("before downsample: ", self.data_list[i].shape[0])
 			self.data_list[i] = resample(self.data_list[i], int(number_of_timesteps)) 

@@ -148,7 +148,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			print("in PM_BatchPretrain run_evaluate_iteration func !!!")
 
 		batch_trajectory = self.state_trajectory_test[i*self.args.batch_size: (i+1)*self.args.batch_size]
-
+		self.subsampled_relative_object_state = np.zeros((self.args.batch_size, self.args.test_length, self.args.env_state_size))
 		# If normalization is set to some value.
 		if self.args.normalization=='meanvar' or self.args.normalization=='minmax':
 			batch_trajectory = (batch_trajectory-self.norm_sub_value)/self.norm_denom_value
@@ -211,6 +211,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		
 		end_idx = ( (trajectory.shape[0]+self.args.batch_size-1) // self.args.batch_size ) * self.args.batch_size
 		trajectory = np.pad(trajectory, ((0, end_idx - trajectory.shape[0]), (0,0), (0,0)), "edge")
+		self.latent_z_demo_id_test = np.array(self.latent_z_demo_id_test)
 
 		self.original_test_length = self.latent_z_demo_id_test.shape[0]
 		self.latent_z_demo_id_test = np.array(self.latent_z_demo_id_test)
@@ -250,26 +251,43 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 				print("task id: ", self.latent_z_demo_id_test)
 		return
 	
-	def map_back_test(self):
-		self.demo_test # demos used for test, demo[i][j] mean in task i, jth demo
+	def map_back_test(self, save_latent_z_title = "latentz_for_clustering"):
+		# self.demo_test # demos used for test, demo[i][j] mean in task i, jth demo
 		last_demo_id = -1
 		current_stack = []
-		for i in range( self.original_test_length.shape[0] ):
-			if(self.original_test_length[i] != last_demo_id ) or ( i == self.original_test_length.shape[0] - 1 ):
+		for i in range(  self.original_test_length ):
+			if(self.latent_z_demo_id_test[i] != last_demo_id ) or ( i == self.original_test_length - 1 ):
 				latent_array = np.array(current_stack)
-				latent_array = np.repeat(latent_array, self.args.test_length, axis=1)
-				latent_array = np.pad(latent_array, ((0, self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0] - latent_array.shape[0]), (0,0)), "edge")
-				print("datapoint length: ", self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0])
-				self.demo_latent_z_test.append( copy.deepcopy(latent_array) )
+				if(latent_array.shape[0] > 0):
+					# print("latent_array: ", latent_array.shape)
+					latent_array = np.repeat(latent_array, self.args.test_length, axis=1)
+					latent_array = np.pad(latent_array, ((0, self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0] - latent_array.shape[0]), (0,0)), "edge")
+					# print("datapoint length: ", self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0])
+					latent_array = np.repeat(latent_array, self.dataset.ds_freq, axis=1)
+					latent_array = np.pad(latent_array, ((0, self.dataset.original_demo_length[ self.latent_z_demo_id_test[i] ] - latent_array.shape[0]), (0,0)), "edge")
+					# print("dataset datapoint length: ", self.dataset.original_demo_length[ self.latent_z_demo_id_test[i] ])
+					
+					self.demo_latent_z_test.append( copy.deepcopy(latent_array) )
 				current_stack.clear()
-			else:
+			if(self.latent_z_demo_id_test[i] == last_demo_id ) or ( i == 0 ):
 				current_stack.append(self.latent_z_test[i])			
 			last_demo_id = self.latent_z_demo_id_test[i]
+		# print("check:")
+		# for i in range(len(self.demo_latent_z_test)):
+			# print("latent length: ", self.demo_latent_z_test[i].shape[0])
 
-		print("check:")
-		for i in range(len(self.demo_latent_z_test)):
-			print("latent length: ", self.demo_latent_z_test[i].shape[0])
-			
+		if(save_latent_z_title is not None):
+			self.z_dir_name = os.path.join(self.dir_name, "Latent_Z")
+			if not(os.path.isdir(self.z_dir_name)):
+				os.mkdir(self.z_dir_name)
+			file_pth = os.path.join( self.z_dir_name, "{0}.npy".format(save_latent_z_title) )
+			np.save(file_pth, self.demo_latent_z_test)
+			if self.args.debug_evaluate:
+				print("file_pth: ", file_pth)
+				print("latent_z: ", latent_z.shape)
+				print("task id: ", self.latent_z_demo_id_test)
+		return
+
 
 
 

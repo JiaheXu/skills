@@ -1,51 +1,63 @@
-	def get_trajectory(self, i, k):
-		
-		# print("in PM_BatchPretrain get_trajectory func !!!")
-		# print("in PM_BatchPretrain get_trajectory func !!!")
-		# print("in PM_BatchPretrain get_trajectory func !!!")
+latent length:  280
+latent length:  308
+latent length:  291
+latent length:  186
+latent length:  221
+latent length:  266
+latent length:  229
+latent length:  340
+latent length:  232
+latent length:  236
+latent length:  272
+latent length:  224
+latent length:  201
+latent length:  231
+latent length:  190
+latent length:  204
+latent length:  274
+latent length:  152
+latent length:  227
+latent length:  227
 
-		if self.args.data in global_dataset_list:
 
-			data_element = self.dataset[self.index_list[i]]
-			# print("index_list: ", self.index_list[i])
-			self.current_traj_len = 14     
+latent length:  140
+latent length:  154
+latent length:  145
+latent length:  93
+latent length:  110
+latent length:  133
+latent length:  114
+latent length:  170
+latent length:  116
+latent length:  118
+latent length:  136
+latent length:  112
+latent length:  100
+latent length:  115
+latent length:  95
+latent length:  102
+latent length:  137
+latent length:  76
+latent length:  113
+latent length:  113
 
-			# print("self.current_traj_len: ", self.current_traj_len)
-
-			batch_trajectory = np.zeros((self.args.batch_size, self.current_traj_len, self.state_size))
-			self.subsampled_relative_object_state = np.zeros((self.args.batch_size, self.current_traj_len, self.args.env_state_size))
-
-			# POTENTIAL:
-			# for x in range(min(self.args.batch_size, len(self.index_list) - 1)):
-
-			# Changing this selection, assuming that the index_list is corrected to only have within dataset length indices.
-			for x in range(self.args.batch_size):
-			
-				# Select the trajectory for each instance in the batch. 
-				if self.args.ee_trajectories:
-					traj = data_element[x]['endeffector_trajectory']
-				else:
-					traj = data_element['demo'][k: k+14]
-           
-				batch_trajectory[x] = data_element['demo'][k: k+14]
-
-			# print("batch_trajectory: ", batch_trajectory.shape)
-			# If normalization is set to some value.
-			if self.args.normalization=='meanvar' or self.args.normalization=='minmax':
-				batch_trajectory = (batch_trajectory-self.norm_sub_value)/self.norm_denom_value
-
-				if self.args.data not in ['NDAX','NDAXMotorAngles']:
-					self.normalized_subsampled_relative_object_state = (self.subsampled_relative_object_state - self.norm_sub_value[-self.args.env_state_size:])/self.norm_denom_value[-self.args.env_state_size:]
-
-			# Compute actions.
-			action_sequence = np.diff(batch_trajectory,axis=1)
-			if self.args.data not in ['NDAX','NDAXMotorAngles']:
-				self.relative_object_state_actions = np.diff(self.normalized_subsampled_relative_object_state, axis=1)
-
-			# Concatenate
-			concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
-
-			# Scaling action sequence by some factor.             
-			scaled_action_sequence = self.args.action_scale_factor*action_sequence
-
-			# return concatenated_traj.transpose((1,0,2)), scaled_action_sequence.transpose((1,0,2)), batch_trajectory.transpose((1,0,2))
+latent length:  93
+latent length:  102
+latent length:  97
+latent length:  62
+latent length:  73
+latent length:  88
+latent length:  76
+latent length:  113
+latent length:  77
+latent length:  78
+latent length:  90
+latent length:  74
+latent length:  67
+latent length:  77
+latent length:  63
+latent length:  68
+latent length:  91
+latent length:  50
+latent length:  75
+latent length:  75
