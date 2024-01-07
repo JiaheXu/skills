@@ -12,7 +12,7 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import cv2
 from matplotlib.patches import Ellipse
-from sklearn import mixture
+
 
 import matplotlib
 matplotlib.use("Agg")
@@ -25,33 +25,28 @@ from math import sqrt
 
 from scipy.spatial import KDTree
 
-cumulative_num_demos = np.load("./data/MAGI/MAGI_Lengths.npy", allow_pickle=True)
+from sklearn import mixture
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import Birch
+from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import MeanShift
+from sklearn.cluster import OPTICS
+from sklearn.cluster import AgglomerativeClustering
 
-file_path = "/home/mmpug/CausalSkillLearning/TrainingLogs/MAGI_1224_test/MEval/m100000/NumpyZs/ALL_Latent_Z.npy"
-test_latent_z_sets = np.load(file_path, allow_pickle=True)
-print("test_latent_z_sets: ", len(test_latent_z_sets))
 
-traj_length = []
-pre_sum = [0]
-N = 0
-test_set = None
-for i in range(len(test_latent_z_sets)):
-	traj_length.append(test_latent_z_sets[i].shape[0])
-	pre_sum.append( pre_sum[-1] + test_latent_z_sets[i].shape[0])
-	N += test_latent_z_sets[i].shape[0]
-	if(i == 0):
-		test_set = test_latent_z_sets[i].copy()
-	else:
-		test_set = np.concatenate( (test_set, test_latent_z_sets[i] ))
-print("traj_length: ", traj_length)
-print("test_set: ", test_set.shape)
-
-file_path2 = "/home/mmpug/skills/TrainingLogs/skills_MAGI_1230/LatentSetDirectory/E2000_C4000"
-latent_z_set = np.load(os.path.join(file_path2, "LatentSet.npy"))
+file_path2 = "/home/mmpug/skills/TrainingLogs/MAGI_0105_test/MEval/Latent_Z/"
+latent_z_set = np.load(os.path.join(file_path2, "latent_z_test.npy"), allow_pickle=True)
 
 print("latent_z_set: ", latent_z_set.shape)
 
-def get_robot_embedding(return_tsne_object=False, perplexity=None): #!!! here
+test_set = np.load(os.path.join(file_path2, "latent_z_for_validation.npy"), allow_pickle=True)
+print("test_set: ", len(test_set))
+
+for i in range(len(test_set)):
+	print(test_set[i].shape)
+
+def get_robot_embedding(latent_z_set, return_tsne_object=False, perplexity=None): #!!! here
 	normed_z = latent_z_set #!!! here
 
 	if perplexity is None:
@@ -70,127 +65,66 @@ def get_robot_embedding(return_tsne_object=False, perplexity=None): #!!! here
 	else:
 		return scaled_embedded_zs
 
-def plot_embedding(embedded_zs, title, shared=False, trajectory=False): #!!! here
-	
-	fig = plt.figure()
-	ax = fig.gca()
-		
-	if shared:
-		colors = 0.2*np.ones((2*N))
-		colors[N:] = 0.8
-	else:
-		colors = 0.2*np.ones((N))
-
-	ax.scatter(embedded_zs[:,0],embedded_zs[:,1],c=colors,vmin=0,vmax=1,cmap='jet')
-		
-	# Title. 
-	ax.set_title("{0}".format(title),fontdict={'fontsize':15})
-	fig.canvas.draw()
-
-	fig.savefig( title[ -3:-1] + ".png" )
-
-	return None
-
-def plot(data, y):
-    n = y.shape[0]
-
-    fig, ax = plt.subplots(1, 1, figsize=(1.61803398875*4, 4))
-    ax.set_facecolor("#bbbbbb")
-    ax.set_xlabel("Dimension 1")
-    ax.set_ylabel("Dimension 2")
-
-    # plot the locations of all data points ..
-    for i, point in enumerate(data.data):
-        if y[i] == 0:
-            # .. as well as their predicted class
-            ax.scatter(*point, zorder=i, color="#dbe9ff", alpha=.6, edgecolors=colors[0])
-        elif y[i] == 1:
-            ax.scatter(*point, zorder=i, color="#ffffff", alpha=.6, edgecolors=colors[1])			
-        else:
-            ax.scatter(*point, zorder=i, color="#ffdbdb", alpha=.6, edgecolors=colors[2])
-
-    handles = [
-		plt.Line2D([0], [0], color="r", lw=4, label=" skill 1 "),
-        plt.Line2D([0], [0], color="g", lw=4, label=" skill 2 "),
-        plt.Line2D([0], [0], color="b", lw=4, label=" skill 3 ")]
-
-    legend = ax.legend(loc="best", handles=handles)
-
-    plt.tight_layout()
-    plt.savefig("valid.pdf")
-
-def draw_ellipse(position, covariance, ax=None, **kwargs):
-    """Draw an ellipse with a given position and covariance"""
-    ax = ax or plt.gca()
-    
-    # Convert covariance to principal axes
-    if covariance.shape == (2, 2):
-        U, s, Vt = np.linalg.svd(covariance)
-        angle = np.degrees(np.arctan2(U[1, 0], U[0, 0]))
-        width, height = 2 * np.sqrt(s)
-    else:
-        angle = 0
-        width, height = 2 * np.sqrt(covariance)
-    
-    # Draw the Ellipse
-    for nsig in range(1, 4):
-        ax.add_patch(Ellipse(position, nsig * width, nsig * height,
-                             angle, **kwargs))
-        
-def plot_gmm(X, labels, ax=None):
-
-	fig, ax = plt.subplots(1, 1, figsize=(1.61803398875*4, 4))
-	ax.set_facecolor("#bbbbbb")
-	ax.set_xlabel("Dimension 1")
-	ax.set_ylabel("Dimension 2")
-
-	ax.scatter(X[:, 0], X[:, 1], c=labels, s=40, cmap='viridis', zorder=2)
-	ax.axis('equal')
-    
-	# w_factor = 0.2 / gmm.weights_.max()
-	# for pos, covar, w in zip(gmm.means_, gmm.covariances_, gmm.weights_):
-		# draw_ellipse(pos, covar, alpha=w * w_factor)
-	legend = ax.legend(loc="best")
-
-	plt.tight_layout()
-	plt.savefig("valid.pdf")
-
-embedded_z_dict = {}
-embedded_z_dict['perp5'] = get_robot_embedding(perplexity=5) #!!! here
-embedded_z_dict['perp10'] = get_robot_embedding(perplexity=10)
-embedded_z_dict['perp30'] = get_robot_embedding(perplexity=30)
-
-# print("embedded_z_dict['perp5']: ", embedded_z_dict['perp5'].size())
-
-data = torch.from_numpy( embedded_z_dict['perp5'] )
-n_components = 2
-d = 2
-model = mixture.GaussianMixture(n_components, covariance_type='full').fit(data)
-
-labels = model.predict(data)
-
-for i in range(labels.shape[0]):
-	if(data[i][0] < 55.0):
-		labels[i] = 0
-	else:
-		labels[i] = 1
-plot_gmm(data, labels)
+def plotting(data, label, title):
+	plt.scatter(data[:, 0], data[:, 1], c=labels, s=40, cmap='viridis')
+	plt.savefig(title + ".png")
 
 
+
+data = get_robot_embedding(latent_z_set, perplexity=50) #!!! here
+cluster_num = 4
+
+kmeans = KMeans(cluster_num, random_state=0)
+labels = kmeans.fit(data).predict(data)
+plotting(data, labels, "kmeans")
+
+# gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
+# labels = gmm.predict(data)
+# plotting(data, labels, "gmm")
+
+# birch = Birch(n_clusters=cluster_num)
+# birch.fit(data)
+# labels = birch.predict(data)
+# plotting(data, labels, "birch")
+
+# model = AffinityPropagation(random_state=0)
+# model.fit(data)
+# labels = model.labels_
+# plotting(data, labels, "AffinityPropagation")
+
+
+# model = MeanShift(bandwidth=2)
+# model.fit(data)
+# labels = model.labels_
+# plotting(data, labels, "MeanShift")
+
+
+# model = OPTICS(min_samples=5)
+# model.fit(data)
+# labels = model.labels_
+# plotting(data, labels, "OPTICS")
+
+# model = AgglomerativeClustering()
+# model.fit(data)
+# labels = model.labels_
+# plotting(data, labels, "AgglomerativeClustering")
+
+# dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
+# labels = dbscan.labels_
+# plotting(data, labels, "DBSCAN")
+
+
+number_neighbors = 1
 
 kdtree = KDTree(latent_z_set)
-number_neighbors = 1
-z_neighbor_distances, z_neighbors_indices = kdtree.query( test_set ,p = 2, k=number_neighbors)
-print("z_neighbors_indices: ", len(z_neighbors_indices) )
-z_neighbors_indices = np.array(z_neighbors_indices)
+# z_neighbor_distances, z_neighbors_indices = kdtree.query( test_set ,p = 2, k=number_neighbors)
 
+for i in range(len(test_set)):
 
-
-print("cumulative_num_demos: ", cumulative_num_demos)
-count = 0
-for i in range(1, len(cumulative_num_demos) ):
-	print( "task: ", i)
-	for j in range(cumulative_num_demos[i-1], cumulative_num_demos[i]):
-		for k in range(traj_length[j]):
-			print(labels[ z_neighbors_indices[count] ], end = "")
-		print("")
+	print("task: ", i//5," demo: ", i%5 +1)
+	for j in range(0, test_set[i].shape[0], 14 ):
+		data_point = test_set[i][j]
+		z_neighbor_distances, z_neighbors_indices = kdtree.query( data_point ,p = 2, k=number_neighbors)
+		# print(z_neighbors_indices)
+		print("step ", j, ' to ',  j+13, " is : ", labels[z_neighbors_indices])
+	print("\n")

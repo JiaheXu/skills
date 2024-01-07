@@ -163,7 +163,9 @@ class PolicyManager_BaseClass():
 		#	# Rollout subpolicy for t timesteps. 
 		#	# Plot rollout.
 		# Embed plots. 
-
+		# print("self.N: ", self.N)
+		# print("self.N: ", self.N)
+		# print("self.N: ", self.N)
 		self.latent_z_set = np.zeros((self.N,self.latent_z_dimensionality))
 		self.trajectory_set = []
 		self.gt_trajectory_set = []

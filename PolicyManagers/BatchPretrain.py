@@ -97,8 +97,8 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		# Sample trajectory segment from dataset.
 		input_dict = {}
 
-		if( self.args.train ):
-			input_dict['state_action_trajectory'], input_dict['sample_action_seq'], input_dict['sample_traj'], input_dict['data_element'] = self.get_trajectory_segment(i)
+		# if( self.args.train ):
+		input_dict['state_action_trajectory'], input_dict['sample_action_seq'], input_dict['sample_traj'], input_dict['data_element'] = self.get_trajectory_segment(i)
 		
 		self.sample_traj_var = input_dict['sample_traj']
 		self.input_dict = input_dict
@@ -136,7 +136,8 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 				if return_z:
 					return latent_z, input_dict['sample_traj'], sample_action_seq, input_dict['data_element']
-									
+			else:
+				return latent_z, input_dict['sample_traj'], None, input_dict['data_element'] 						
 		return None, None, None, None
 
 	def run_evaluate_iteration(self, i): 
@@ -188,9 +189,9 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			traj.append( data_element['demo'][start_time: end_time] )
 			self.latent_z_demo_id_test.append(demo_id)
 		traj = np.array(traj)
-		if(self.args.debug_evaluate):
-			print("demo length: ", data_element['demo'].shape[0] // self.args.test_length)
-			print("traj: ", traj.shape[0])
+		# if(self.args.debug_evaluate):
+		# print("demo length: ", data_element['demo'].shape[0] // self.args.test_length)
+		# print("traj: ", traj.shape[0])
 		return traj
 
 	def get_evaluate_data(self):
@@ -208,7 +209,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 					trajectory = np.concatenate( (trajectory, self.get_all_segment(self.dataset[idx], idx) )  )
 				# print("trajectory: ", trajectory)
 			self.demo_test.append(demo_idx)
-		
+		# print("demo_test: ", self.demo_test)
 		end_idx = ( (trajectory.shape[0]+self.args.batch_size-1) // self.args.batch_size ) * self.args.batch_size
 		trajectory = np.pad(trajectory, ((0, end_idx - trajectory.shape[0]), (0,0), (0,0)), "edge")
 		self.latent_z_demo_id_test = np.array(self.latent_z_demo_id_test)
@@ -251,30 +252,37 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 				print("task id: ", self.latent_z_demo_id_test)
 		return
 	
-	def map_back_test(self, save_latent_z_title = "latentz_for_clustering"):
+	def map_back_evaluate(self, save_latent_z_title = "latent_z_for_validation"):
 		# self.demo_test # demos used for test, demo[i][j] mean in task i, jth demo
-		last_demo_id = -1
+		next_demo_id = -1
 		current_stack = []
+		# print("self.latent_z_demo_id_test : ", self.latent_z_demo_id_test )
 		for i in range(  self.original_test_length ):
-			if(self.latent_z_demo_id_test[i] != last_demo_id ) or ( i == self.original_test_length - 1 ):
+			
+			current_stack.append(self.latent_z_test[i])
+			if(i < self.original_test_length - 1):
+				next_demo_id = self.latent_z_demo_id_test[i+1]
+
+			if(self.latent_z_demo_id_test[i] != next_demo_id ) or ( i == self.original_test_length - 1 ):
 				latent_array = np.array(current_stack)
 				if(latent_array.shape[0] > 0):
-					# print("latent_array: ", latent_array.shape)
-					latent_array = np.repeat(latent_array, self.args.test_length, axis=1)
-					latent_array = np.pad(latent_array, ((0, self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0] - latent_array.shape[0]), (0,0)), "edge")
-					# print("datapoint length: ", self.dataset[ self.latent_z_demo_id_test[i] ]['demo'].shape[0])
+					demo_idx = self.latent_z_demo_id_test[i]
+					# print("latent_array1: ", latent_array.shape)
+					latent_array = np.repeat(latent_array, self.args.test_length, axis=0)
+					# print("latent_array2: ", latent_array.shape)
+					latent_array = np.pad(latent_array, ((0, self.dataset[ demo_idx ]['demo'].shape[0] - latent_array.shape[0]), (0,0)), "edge")
+					# print("latent_array3: ", latent_array.shape)
 					latent_array = np.repeat(latent_array, self.dataset.ds_freq, axis=1)
-					latent_array = np.pad(latent_array, ((0, self.dataset.original_demo_length[ self.latent_z_demo_id_test[i] ] - latent_array.shape[0]), (0,0)), "edge")
-					# print("dataset datapoint length: ", self.dataset.original_demo_length[ self.latent_z_demo_id_test[i] ])
-					
+					# print("latent_array4: ", latent_array.shape)
+					latent_array = np.pad(latent_array, ((0, self.dataset.original_demo_length[ demo_idx ] - latent_array.shape[0]), (0,0)), "edge")
+					# print("latent_array5: ", latent_array.shape)
 					self.demo_latent_z_test.append( copy.deepcopy(latent_array) )
 				current_stack.clear()
-			if(self.latent_z_demo_id_test[i] == last_demo_id ) or ( i == 0 ):
-				current_stack.append(self.latent_z_test[i])			
-			last_demo_id = self.latent_z_demo_id_test[i]
 		# print("check:")
 		# for i in range(len(self.demo_latent_z_test)):
-			# print("latent length: ", self.demo_latent_z_test[i].shape[0])
+		# 	print("validation latent length: ", self.demo_latent_z_test[i].shape[0])
+		
+		# print("latentz_for_clustering length: ", self.demo_latent_z_test.shape)
 
 		if(save_latent_z_title is not None):
 			self.z_dir_name = os.path.join(self.dir_name, "Latent_Z")
@@ -282,30 +290,51 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 				os.mkdir(self.z_dir_name)
 			file_pth = os.path.join( self.z_dir_name, "{0}.npy".format(save_latent_z_title) )
 			np.save(file_pth, self.demo_latent_z_test)
+			print("file: ", file_pth)
 			if self.args.debug_evaluate:
 				print("file_pth: ", file_pth)
 				print("latent_z: ", latent_z.shape)
 				print("task id: ", self.latent_z_demo_id_test)
 		return
 
-
-
-
 	def evaluate(self, model=None, save_latent_z_title = None):
+		
 		if model:
 			print("Loading model in evaluating.")
 			self.load_all_models(model)	
+
+
+
 		if self.state_trajectory_test is None:
 			self.get_evaluate_data() #concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
+		
 		if self.latent_z_test is None:
 			self.get_evaluate_latent_z()
-		if save_latent_z_title is not None:
-			self.save_latent_z( self.latent_z_test, save_latent_z_title)
-		else:
-			self.save_latent_z( self.latent_z_test, "latent_z_test")
+
 		if self.args.map_back:
-			self.map_back_test()
-		
+			self.map_back_evaluate()
+
+		self.get_trajectory_and_latent_sets()
+		if save_latent_z_title is not None:
+			self.save_latent_z( self.latent_z_set, save_latent_z_title)
+		else:
+			self.save_latent_z( self.latent_z_set, "latent_z_test")
+
+		# self.latent_z_set = self.latent_z_test
+
+		self.embedded_z_dict = {} 
+		self.embedded_z_dict['perp5'] = self.get_robot_embedding(perplexity=5) #!!! here need self.latent_z_set
+		self.embedded_z_dict['perp10'] = self.get_robot_embedding(perplexity=10)
+		self.embedded_z_dict['perp30'] = self.get_robot_embedding(perplexity=30)
+		self.embedded_z_dict['perp50'] = self.get_robot_embedding(perplexity=50)
+		self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
+
+		image_perp5 = self.plot_embedding(self.embedded_z_dict['perp5'], title="Z Space Perp 5") #!!! here
+		image_perp10 = self.plot_embedding(self.embedded_z_dict['perp10'], title="Z Space Perp 10")
+		image_perp30 = self.plot_embedding(self.embedded_z_dict['perp30'], title="Z Space Perp 30")
+		image_perp50 = self.plot_embedding(self.embedded_z_dict['perp50'], title="Z Space Perp 50")
+		image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space Perp 100")
+
 		return
 
 	def get_trajectory_segment(self, i):
@@ -626,7 +655,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			colors = 0.2*np.ones((2*self.N))
 			colors[self.N:] = 0.8
 		else:
-			colors = 0.2*np.ones((self.N))
+			colors = 0.2*np.ones((embedded_zs.shape[0]))
 		
 		#not for pretrain_sub
 		if trajectory:
@@ -662,5 +691,9 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		width, height = fig.get_size_inches() * fig.get_dpi()
 		image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(int(height), int(width), 3)
 		image = np.transpose(image, axes=[2,0,1])
-
+		if self.args.train:
+			file_name = os.path.join(self.dir_name, title)
+			fig.savefig(file_name + ".png" )
+		else:
+			fig.savefig( title + '.png')
 		return image

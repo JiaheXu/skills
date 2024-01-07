@@ -1,37 +1,239 @@
-from Utils.headers import *
-from Datasets import DataLoaders, DAPG_DataLoader, DexMV_DataLoader, RealWorldRigid_DataLoader, MAGI_DataLoader
+# YUZU
 
-from PolicyManagers.BatchPretrain import PolicyManager_BatchPretrain
-# import TestClass
-# import faulthandler
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
 
+from headers import *
+import DataLoaders, MIME_DataLoader, Roboturk_DataLoader, Mocap_DataLoader, Robomimic_DataLoaders, \
+	  GRAB_DataLoader, DAPG_DataLoader, DexMV_DataLoader, MOMART_DataLoader, FrankaKitchen_DataLoader, \
+		RealWorldRigid_DataLoader, NDAX_DataLoader
+from PolicyManagers import *
+import TestClass
+import faulthandler
+
+f = open("SegFDebug2.txt","w+")
+faulthandler.enable(f)
 
 def return_dataset(args, data=None, create_dataset_variation=False):
 	
 	# The data parameter overrides the data in args.data. 
 	# This is so that we can call return_dataset with source and target data for transfer setting.
-	# print("args.data: ", args.data)
 	if data is not None:
 		args.data = data
-	
-	elif args.data in ["MAGIPreproc"]:
-		dataset = MAGI_DataLoader.MAGI_PreDataset( args )
-	elif args.data in ["MAGI"]:
-		dataset = MAGI_DataLoader.MAGI_Dataset( args )
+
+	# Define Data Loader.
+	############################
+	if args.data=='ContinuousNonZero':
+		dataset = DataLoaders.ContinuousNonZeroToyDataset(args.datadir, create_dataset_variation=create_dataset_variation)
+	elif args.data=='DeterGoal':
+		dataset = DataLoaders.DeterministicGoalDirectedDataset(args.datadir)			
+	elif args.data=='DirContNonZero':
+		dataset = DataLoaders.ContinuousDirectedNonZeroToyDataset(args.datadir)
+	elif args.data=='ToyContext':
+		dataset = DataLoaders.ToyContextDataset(args.datadir)
+	############################
+	elif args.data=='OldMIME':		
+		dataset = MIME_DataLoader.MIME_NewDataset(args, short_traj=args.short_trajectories)
+	elif args.data=='MIME':
+		if args.single_hand is None:
+			dataset = MIME_DataLoader.MIME_NewMetaDataset(args, short_traj=args.short_trajectories, traj_length_threshold=args.dataset_traj_length_limit)
+		else:
+			dataset = MIME_DataLoader.MIME_OneHandedDataset(args, short_traj=args.short_trajectories, traj_length_threshold=args.dataset_traj_length_limit)
+	############################			
+	elif args.data=='Roboturk':		
+		dataset = Roboturk_DataLoader.Roboturk_NewSegmentedDataset(args)
+	elif args.data=='OrigRoboturk':
+		dataset = Roboturk_DataLoader.Roboturk_Dataset(args)
+	elif args.data=='FullRoboturk':
+		dataset = Roboturk_DataLoader.Roboturk_FullDataset(args)
+	elif args.data=='RoboturkObjects':
+		dataset = Roboturk_DataLoader.Roboturk_ObjectDataset(args)
+	elif args.data=='RoboturkRobotObjects':
+		dataset = Roboturk_DataLoader.Roboturk_RobotObjectDataset(args)	
+	elif args.data=='RoboturkMultiObjects':
+		dataset = Roboturk_DataLoader.Roboturk_MultiObjectDataset(args)	
+	elif args.data=='RoboturkRobotMultiObjects':
+		dataset = Roboturk_DataLoader.Roboturk_RobotMultiObjectDataset(args)	
+	############################
+	elif args.data=='Mocap':
+		dataset = Mocap_DataLoader.Mocap_Dataset(args)
+	############################		
+	elif args.data=='OrigRoboMimic':
+		dataset = Robomimic_DataLoaders.OrigRobomimic_Dataset(args)
+	elif args.data=='RoboMimic':
+		dataset = Robomimic_DataLoaders.Robomimic_Dataset(args)
+	elif args.data=='RoboMimicObjects':
+		dataset = Robomimic_DataLoaders.Robomimic_ObjectDataset(args)
+	elif args.data=='RoboMimicRobotObjects':
+		dataset = Robomimic_DataLoaders.Robomimic_RobotObjectDataset(args)
+	############################
+	elif args.data=='GRABPreproc':
+		dataset = GRAB_DataLoader.GRAB_PreDataset(args)
+	elif args.data=='GRAB':
+		dataset = GRAB_DataLoader.GRAB_Dataset(args)
+	elif args.data=='GRABArmHandPreproc':
+		dataset = GRAB_DataLoader.GRABArmHand_PreDataset(args)
+	elif args.data=='GRABArmHand':
+		dataset = GRAB_DataLoader.GRABArmHand_Dataset(args)
+	elif args.data=='GRABHandPreproc':
+		dataset = GRAB_DataLoader.GRABHand_PreDataset(args)
+	elif args.data=='GRABHand':
+		dataset = GRAB_DataLoader.GRABHand_Dataset(args)
+	elif args.data=='GRABArmHandObjectPreproc':
+		dataset = GRAB_DataLoader.GRABArmHandObject_PreDataset(args)
+	elif args.data=='GRABArmHandObject':
+		dataset = GRAB_DataLoader.GRABArmHandObject_Dataset(args)
+	elif args.data=='GRABObjectPreproc':
+		dataset = GRAB_DataLoader.GRABObject_PreDataset(args)
+	elif args.data=='GRABObject':
+		dataset = GRAB_DataLoader.GRABObject_Dataset(args)
+	############################
+	elif args.data in ['DAPGPreproc', 'DAPGHandPreproc', 'DAPGObjectPreproc']:
+		dataset = DAPG_DataLoader.DAPG_PreDataset(args)
+	elif args.data=='DAPG':
+		dataset = DAPG_DataLoader.DAPG_Dataset(args)
+	elif args.data=='DAPGHand':
+		dataset = DAPG_DataLoader.DAPGHand_Dataset(args)
+	elif args.data=='DAPGObject':
+		dataset = DAPG_DataLoader.DAPGObject_Dataset(args)
+	############################
+	elif args.data in ['DexMVPreproc', 'DexMVHandPreproc', 'DexMVObjectPreproc']:
+		dataset = DexMV_DataLoader.DexMV_PreDataset(args)
+	elif args.data=='DexMV':
+		dataset = DexMV_DataLoader.DexMV_Dataset(args)
+	elif args.data=='DexMVHand':
+		dataset = DexMV_DataLoader.DexMVHand_Dataset(args)
+	elif args.data=='DexMVObject':
+		dataset = DexMV_DataLoader.DexMV_ObjectDataset(args)
+	############################
+	elif args.data=='MOMARTPreproc':
+		dataset = MOMART_DataLoader.OrigMOMART_Dataset(args)
+	elif args.data=='MOMART':
+		dataset = MOMART_DataLoader.MOMART_Dataset(args)
+	elif args.data=='MOMARTObject':
+		dataset = MOMART_DataLoader.MOMART_ObjectDataset(args)
+	elif args.data=='MOMARTRobotObject':
+		dataset = MOMART_DataLoader.MOMART_RobotObjectDataset(args)
+	############################
+	elif args.data=='FrankaKitchenPreproc':
+		dataset = FrankaKitchen_DataLoader.OrigFrankaKitchen_Dataset(args)
+	elif args.data=='FrankaKitchen':
+		dataset = FrankaKitchen_DataLoader.FrankaKitchen_Dataset(args)
+	elif args.data=='FrankaKitchenObject':
+		dataset = FrankaKitchen_DataLoader.FrankaKitchen_ObjectDataset(args)
+	elif args.data=='FrankaKitchenRobotObject':
+		dataset = FrankaKitchen_DataLoader.FrankaKitchen_RobotObjectDataset(args)
+	############################	
+	elif args.data=='RealWorldRigidPreproc':
+		dataset = RealWorldRigid_DataLoader.RealWorldRigid_PreDataset(args)
+	elif args.data in ['RealWorldRigid','RealWorldRigidRobot']:
+		dataset = RealWorldRigid_DataLoader.RealWorldRigid_Dataset(args)
+	elif args.data in ['RealWorldRigidJEEF']:
+		dataset = RealWorldRigid_DataLoader.RealWorldRigid_JointEEFDataset(args)
+	############################
+	elif args.data=='NDAXPreproc':
+		dataset = NDAX_DataLoader.NDAXInterface_PreDataset(args)
+	elif args.data in ['NDAX', 'NDAXMotorAngles']:
+		dataset = NDAX_DataLoader.NDAXInterface_Dataset(args)
+	############################
+	elif args.data=='RealWorldRigidHumanPreproc':
+		dataset = RealWorldRigidHuman_DataLoader.RealWorldRigidHuman_PreDataset(args)
+	elif args.data=='RealWorldRigidHuman':
+		dataset = RealWorldRigidHuman_DataLoader.RealWorldRigidHuman_PreDataset(args)
 
 	return dataset
-
+	
 class Master():
 
 	def __init__(self, arguments):
 		self.args = arguments 
 
-		print("Creating Datasets")			
-		self.dataset = return_dataset(self.args, create_dataset_variation=self.args.dataset_variation)
+		if self.args.setting not in ['transfer','cycle_transfer','fixembed','jointtransfer','jointcycletransfer','jointfixembed','jointfixcycle','densityjointtransfer','densityjointfixembedtransfer']:
+			print("Creating Datasets")			
+			self.dataset = return_dataset(self.args, create_dataset_variation=self.args.dataset_variation)			
 
-		if self.args.setting=='pretrain_sub':
-			self.policy_manager = PolicyManager_BatchPretrain(self.dataset, self.args)
+		print("Embed after dataset creation")
+		embed()
+
+		# Now define policy manager.
+		if self.args.setting in ['learntsub', 'joint']:
+			# self.policy_manager = PolicyManager_BatchJoint(self.args.number_policies, self.dataset, self.args)
+			if self.args.batch_size > 1: 
+				self.policy_manager = PolicyManager_BatchJoint(self.args.number_policies, self.dataset, self.args)
+			else:
+				self.policy_manager = PolicyManager_Joint(self.args.number_policies, self.dataset, self.args)
+		elif self.args.setting in ['queryjoint']:
+			self.policy_manager = PolicyManager_BatchJointQueryMode(self.args.number_policies, self.dataset, self.args)
+			
+		elif self.args.setting=='context':
+			# Assume we're going to run with batch size > 1. 
+			self.policy_manager = PolicyManager_BatchJoint(self.args.number_policies, self.dataset, self.args)
+
+		elif self.args.setting=='pretrain_sub':
+			if self.args.batch_size > 1: # Only setting batch manager for training.
+				self.policy_manager = PolicyManager_BatchPretrain(self.args.number_policies, self.dataset, self.args)
+			else:
+				self.policy_manager = PolicyManager_Pretrain(self.args.number_policies, self.dataset, self.args)
+
+		elif self.args.setting=='baselineRL':
+			self.policy_manager = PolicyManager_BaselineRL(args=self.args)
+
+		elif self.args.setting=='downstreamRL':
+			self.policy_manager = PolicyManager_DownstreamRL(args=self.args)
+
+		elif self.args.setting=='DMP':			
+			self.policy_manager = PolicyManager_DMPBaselines(self.args.number_policies, self.dataset, self.args)
+
+		elif self.args.setting=='imitation':
+			self.policy_manager = PolicyManager_Imitation(self.args.number_policies, self.dataset, self.args)
+
+		elif self.args.setting in ['transfer','cycle_transfer','fixembed','jointtransfer','jointcycletransfer','jointfixembed','jointfixcycle','densityjointtransfer','densityjointfixembedtransfer','downstreamtasktransfer']:
+
+			# Creating two copies of arguments, in case we're transferring between MIME left and MIME right.
+			source_args = copy.deepcopy(self.args)
+			target_args = copy.deepcopy(self.args)
+			source_args.single_hand = self.args.source_single_hand
+			target_args.single_hand = self.args.target_single_hand
+			source_args.ee_trajectories = self.args.source_ee_trajs
+			target_args.ee_trajectories = self.args.target_ee_trajs
+			if self.args.source_datadir is not None:
+				source_args.datadir = self.args.source_datadir
+			if self.args.target_datadir is not None:
+				target_args.datadir = self.args.target_datadir	
+	
+			source_dataset = return_dataset(source_args, data=self.args.source_domain)
+			target_dataset = return_dataset(target_args, data=self.args.target_domain)
+				
+			# # If we're creating a variation in the dataset: 
+			# if self.args.dataset_variation:
+			# 	target_dataset = return_dataset(self.args, data=self.args.target_domain, create_dataset_variation=create_dataset_variation)
+
+			if self.args.setting=='transfer':
+				self.policy_manager = PolicyManager_Transfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='cycle_transfer':
+				self.policy_manager = PolicyManager_CycleConsistencyTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)				
+			elif self.args.setting=='fixembed':
+				self.policy_manager = PolicyManager_FixEmbedCycleConTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='jointfixembed':
+				self.policy_manager = PolicyManager_JointFixEmbedTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='jointfixcycle':
+				self.policy_manager = PolicyManager_JointFixEmbedCycleTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='jointtransfer':
+				self.policy_manager = PolicyManager_JointTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='jointcycletransfer':
+				self.policy_manager = PolicyManager_JointCycleTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='densityjointtransfer':
+				self.policy_manager = PolicyManager_DensityJointTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='densityjointfixembedtransfer':
+				self.policy_manager = PolicyManager_DensityJointFixEmbedTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+			elif self.args.setting=='downstreamtasktransfer':
+				self.policy_manager = PolicyManager_DownstreamTaskTransfer(args=self.args, source_dataset=source_dataset, target_dataset=target_dataset)
+
+		elif self.args.setting in ['iktrainer']:
+			self.policy_manager = PolicyManager_IKTrainer(self.dataset, self.args)
 
 		if self.args.debug:
 			print("Embedding in Master.")
@@ -41,14 +243,44 @@ class Master():
 		self.policy_manager.setup()
 
 	def run(self):
-		if self.args.setting in ['pretrain_sub']:
+		if self.args.setting in ['pretrain_sub','pretrain_prior','imitation','baselineRL','downstreamRL',\
+			'transfer','cycle_transfer','jointtransfer','fixembed','jointcycletransfer', 'jointfixembed',\
+			'jointfixcycle','densityjointtransfer','densityjointfixembedtransfer','iktrainer', 'downstreamtasktransfer']:
 			if self.args.train:
 				if self.args.model:
 					self.policy_manager.train(self.args.model)
 				else:
 					self.policy_manager.train()
 			else:			
-				self.policy_manager.evaluate(model=self.args.model)		
+				if self.args.setting=='pretrain_prior':
+					self.policy_manager.train(self.args.model)
+				else:
+					self.policy_manager.evaluate(model=self.args.model)		
+				
+		# elif self.args.setting=='learntsub' or self.args.setting=='joint' or self.args.setting=='context':
+		elif self.args.setting in ['learntsub','joint','context','queryjoint']:
+			if self.args.train:
+				if self.args.model:
+					self.policy_manager.train(self.args.model)
+				else:
+					if self.args.subpolicy_model:
+						print("Just loading subpolicies.")
+						self.policy_manager.load_all_models(self.args.subpolicy_model, just_subpolicy=True)
+					self.policy_manager.train()
+			else:
+				# self.policy_manager.train(self.args.model)
+				self.policy_manager.evaluate(self.args.model)
+
+		# elif self.args.setting=='baselineRL' or self.args.setting=='downstreamRL':
+		# 	if self.args.train:
+		# 		if self.args.model:
+		
+		# 			self.policy_manager.train(self.args.model)
+		# 		else:
+		# 			self.policy_manager.train()
+
+		elif self.args.setting=='DMP':
+			self.policy_manager.evaluate_across_testset()
 
 	def test(self):
 		if self.args.test_code:
@@ -307,38 +539,58 @@ def parse_arguments():
 	parser.add_argument('--z_tuple_gmm',dest='z_tuple_gmm',type=int,default=0,help='Whether to use a Z Tuple GMM or not.')
 	parser.add_argument('--z_gmm',dest='z_gmm',type=int,default=0,help='Whether to use a Z GMM or not.')
 
+	# Wasserstein GAN
+	parser.add_argument('--wasserstein_gan',dest='wasserstein_gan',type=int,default=0,help='Whether to implement Wasserstein GAN or not.')
+	parser.add_argument('--lsgan',dest='lsgan',type=int,default=0,help='Whether to implement LSGAN or not.')
+	parser.add_argument('--gradient_penalty',dest='gradient_penalty',type=int,default=0,help='Whether to implement Wasserstein GAN gradient penalty or not.')
+	parser.add_argument('--gradient_penalty_weight',dest='gradient_penalty_weight',type=float,default=10.,help='Relative weight of the Wasserstein discriminator gradient penalty.')
+	parser.add_argument('--wasserstein_discriminator_clipping',dest='wasserstein_discriminator_clipping',type=int,default=0,help='Whether to apply clipping of discriminator parameters.')
+	parser.add_argument('--wasserstein_discriminator_clipping_value',dest='wasserstein_discriminator_clipping_value',type=float,default=0.01,help='Value to apply clipping of discriminator parameters.')
+	parser.add_argument('--identity_translation_loss_weight',dest='identity_translation_loss_weight',type=float,default=0.,help='Weight associated with the regularization of translation model to identity for source zs.')
+
 	# Task ID based discriminability
 	parser.add_argument('--task_discriminability',dest='task_discriminability',type=int,default=0,help='Whether or not to implement task based discriminability.')
 	parser.add_argument('--number_of_tasks',dest='number_of_tasks',type=int,default=0,help='Number of tasks to be considered in task based discriminability.')
 	parser.add_argument('--task_discriminability_loss_weight',dest='task_discriminability_loss_weight',type=float,default=0.,help='Loss weight associated with task based discriminability.')
 	parser.add_argument('--task_discriminator_weight',dest='task_discriminator_weight',type=float,default=0.,help='Loss weight associated with task discriminator(s)')
 	parser.add_argument('--task_based_supervision',dest='task_based_supervision',type=int,default=0,help='Whether or not we are using task based supervision.')
+	
+	parser.add_argument('--pure_supervision',dest='pure_supervision',type=int,default=0,help='Whether or not to use pure supervision and ignore unsupervised losses.')
+	parser.add_argument('--task_based_supervised_loss_weight',dest='task_based_supervised_loss_weight',type=float,default=0.,help='Loss weight associated with the task based supervised loss.')
 
-	parser.add_argument('--use_wandb',dest='use_wandb',type=int,default=1,help='Whether or not we are using wandb')
+	# Parameters for contextual training. 
+	parser.add_argument('--mask_fraction',dest='mask_fraction',type=float,default=0.15,help='What fraction of zs to mask in contextual embedding.')
+	parser.add_argument('--context',dest='context',type=int,default=0,help='Whether to implement contextual embedding model or original joint embedding model in Joint Transfer setting.')
+	parser.add_argument('--new_context',dest='new_context',type=int,default=1,help='Whether to implement new contextual embedding model or original one.')
+	parser.add_argument('--ELMO_embeddings',dest='ELMO_embeddings',type=int,default=0,help='Whether to implement ELMO style embeddings.')
+	parser.add_argument('--eval_transfer_metrics',dest='eval_transfer_metrics',type=int,default=0,help='Whether to evaluate correspondence metrics in transfer setting.')
 
-	parser.add_argument('--cluster_points',dest='cluster_points',type=int,default=500,help='number of points used for clustering')
+	# Parameters for downstream PPO. 
+	parser.add_argument('--rl_policy_learning_rate', dest='rl_policy_learning_rate', type=float, default=3e-4, help='Learning rate for RL Policy.')
+	parser.add_argument('--rl_critic_learning_rate', dest='rl_critic_learning_rate', type=float, default=1e-3, help='Learning rate for RL Critic.')
+	parser.add_argument('--target_KL',dest='target_KL',type=float,default=0.01,help='Target KL value.')
+	parser.add_argument('--finetune_method',dest='finetune_method',type=str,default=None,choices=[None,'AdaptZ','FullRL','EE'],help='What type of finetuning auxilliary reward to use.')
+	parser.add_argument('--auxilliary_reward_weight',dest='auxilliary_reward_weight',type=float,default=0.,help='Weight associated with the auxilliary reward weight.')
+	parser.add_argument('--finetune_epochs',dest='finetune_epochs',type=int,default=10,help='Number of episodes / epochs to finetune RL for.')
+	parser.add_argument('--finetune_eval_freq',dest='finetune_eval_freq',type=int,default=10,help='Frequency of evaluation.')
 
-	parser.add_argument('--test_set_size',dest="test_set_size",type=int,default=0,help='test_set_size')
-	parser.add_argument('--test_len_pertask',dest="test_len_pertask",type=int,default=5,help='test_len_pertask')
-	parser.add_argument('--test_length',dest="test_length",type=int,default=14,help='test_len_per_seg')
-	parser.add_argument('--debug_evaluate',dest="debug_evaluate",type=int,default=0,help='debug_evaluate')
-	parser.add_argument('--map_back',dest="map_back",type=int,default=1,help='map_back')
-	parser.add_argument('--train_latent_z',dest="train_latent_z",type=str,help='train_latent_z')
 	return parser.parse_args()
 
 def main(args):
 
 	args = parse_arguments()
-	master = Master(args)
+	# Moving this up.
+	wandb.init(project=args.setting, dir=args.logdir, name=args.name)
 
-	if( args.use_wandb ):
-		wandb.init(project=args.setting, dir=args.logdir, name=args.name)
-		wandb.config.update(args)
-	master.run()
-	print("done !!!")
-	print("done !!!")
-	print("done !!!")
-	
+	master = Master(args)	
+	# Add argparse flags to wandb config.
+	wandb.config.update(args)
+
+	if args.test_code:
+		master.test()
+	else:
+		master.run()
+
 if __name__=='__main__':
 	main(sys.argv)
 

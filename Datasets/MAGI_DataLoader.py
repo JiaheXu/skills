@@ -75,26 +75,30 @@ class MAGI_PreDataset(Dataset):
         395 - 397	left shadow hand base rotation
         398 - 425	left shadow hand actions
 
-        426 - 432	object pose
-        433 - 435	object linear velocity
-        436 - 438	object angle velocity
+        426 - 432	door right handle position
+        433 - 439	door left handle position
 
-        439 - 441	door right handle position
-        442 - 444	door left handle position
 		"""
 		self.right_hand_joint_max = 213
 		self.left_hand_joint_max = 426
-		self.object_joint_max = 445
+		self.object_joint_max = 440
 		
 		right_tips = []
 		for i in range(5):
 			right_tips += list(range(84 + i*13, 84 + i*13 + 7) )
 
-		self.joint_indices = list( range(0, 28) ) + right_tips + list( range(179,185) ) + list( range(442,445) )
-		# 28 + 35 + 6 + 3 = 34 + 38 = 72
+		self.robot_index = list(range(0,28)) + list( range(179,185) )
+		self.env_index = list( range(426,433) ) #+ list(range(149, 179)) 
 
-		self.robot_state_dim = 69
-		self.env_state_dim = 3
+		# self.robot_index = list( range(179,185) )
+		# self.env_index = list( range(426,433) ) 
+
+		self.joint_indices = self.robot_index + self.env_index 
+		
+		# 28 + 5*7 + 30 + 6 + 7 = 69 + 7 = 76
+		print("self.joint_indices: ", self.joint_indices)
+		self.robot_state_dim = len(self.robot_index)
+		self.env_state_dim = len(self.env_index)
 		
 		print("observation dim: ", len(self.joint_indices) )
 		print("observation dim: ", len(self.joint_indices) )
@@ -303,8 +307,9 @@ class MAGI_Dataset(Dataset):
 		print("dataset_length", self.dataset_length)
 
 		for i in range(self.dataset_length):
-			self.original_demo_length.append( self.data_list[i].shape[0] )
+			self.original_demo_length.append( copy.deepcopy(self.data_list[i].shape[0] ))
 			print("demo length: ", i, " ", self.data_list[i].shape[0])
+
 			number_of_timesteps = self.data_list[i].shape[0]//self.ds_freq
 			# print("before downsample: ", self.data_list[i].shape[0])
 			self.data_list[i] = resample(self.data_list[i], int(number_of_timesteps)) 
