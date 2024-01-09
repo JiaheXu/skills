@@ -41,9 +41,21 @@ task1_seg = [[94, 135],
 [120, 160],
 [120, 163],
 [130, 170],
-[160, 190]]
+[160, 190],
+[235, 270],
+[190, 240],
+[250, 300],
+[120, 170],
+[190, 240],
+[140, 180],
+[210, 250],
+[180, 230],
+[150, 210],
+[180, 220],
+[290, 330],
+[260, 300]]
 
-task2_seg = [[160, 201],
+task2_seg = [[160, 195],
 [190, 230],
 [140, 182],
 [150, 190], 
@@ -62,10 +74,7 @@ task2_seg = [[160, 201],
 [160, 190], 
 [175, 205], 
 [175, 205], 
-[155, 185], 
-[190, 220], 
-[190, 220], 
-[195, 225]]
+[155, 185]]
 
 task3_seg = [[150, 190],
 [180, 220],
@@ -88,16 +97,39 @@ task3_seg = [[150, 190],
 [130, 160], 
 [160, 190]] 
 
+task4_seg = [
+[125, 185],
+[120, 155],
+[175, 215],
+[135, 170],
+[120, 165],
+[125, 160],
+[220, 270],
+[105, 130],
+[160, 200],
+[165, 200],
+[120, 150],
+[270, 310],
+[160, 205],
+[165, 195],
+[165, 210],
+[150, 180],
+[210, 240],
+[180, 215],
+[185, 215],
+[100, 120]]
+
 task1_seg = np.array(task1_seg)
 task2_seg = np.array(task2_seg)
 task3_seg = np.array(task3_seg)
+task4_seg = np.array(task4_seg)
 
-tasks_seg = [task1_seg, task3_seg]
+tasks_seg = [task1_seg, task2_seg, task3_seg, task4_seg]
 
 segment_length = 14
 
 
-file_path2 = "/home/mmpug/skills/TrainingLogs/MAGI_0105_test/MEval/Latent_Z/"
+file_path2 = "/home/mmpug/skills/TrainingLogs/MAGI_0107_test/MEval/Latent_Z/"
 latent_z_set = np.load(os.path.join(file_path2, "latent_z_test.npy"), allow_pickle=True)
 
 print("latent_z_set: ", latent_z_set.shape)
@@ -155,9 +187,10 @@ def get_demo_score(task_id, demo_id, demo_skills):
 		if(end_time <= ground_truth[0]):
 			print(demo_skills[i])
 			stack.append(demo_skills[i])
+	stack = np.array( stack ,dtype=np.int32) 
+	if(stack.shape[0]>0):
+		final_stack.append(np.bincount(stack).argmax())
 
-	stack = np.array( stack ) 
-	final_stack.append(np.bincount(stack).argmax())
 	
 	stack = []
 	print("seg2: ")
@@ -167,9 +200,10 @@ def get_demo_score(task_id, demo_id, demo_skills):
 		if(ground_truth[0] < start_time  and end_time < ground_truth[1]):
 			print(demo_skills[i])
 			stack.append(demo_skills[i])
+	stack = np.array( stack ,dtype=np.int32) 
+	if(stack.shape[0]>0):
+		final_stack.append(np.bincount(stack).argmax())
 
-	stack = np.array( stack ) 
-	final_stack.append(np.bincount(stack).argmax())
 
 	stack = []
 	print("seg3: ")
@@ -179,10 +213,11 @@ def get_demo_score(task_id, demo_id, demo_skills):
 		if(ground_truth[1] <= start_time ):
 			print(demo_skills[i])
 			stack.append(demo_skills[i])
+	stack = np.array( stack ,dtype=np.int32) 
+	if(stack.shape[0]>0):
+		final_stack.append(np.bincount(stack).argmax())
 	
-	stack = np.array( stack ) 
-	final_stack.append(np.bincount(stack).argmax())
-	unique_stack = unique(final_stack)
+	unique_stack = np.unique(final_stack)
 
 	score = 0
 	if(len(final_stack) == len(unique_stack)):
@@ -191,12 +226,12 @@ def get_demo_score(task_id, demo_id, demo_skills):
 
 	return score
 
-data = get_robot_embedding(latent_z_set, perplexity=50) #!!! here
-cluster_num = 4
+data = get_robot_embedding(latent_z_set, perplexity=10) #!!! here
+cluster_num = 3
 
-kmeans = KMeans(cluster_num, random_state=0)
-labels = kmeans.fit(data).predict(data)
-plotting(data, labels, "kmeans")
+# kmeans = KMeans(cluster_num, random_state=0)
+# labels = kmeans.fit(data).predict(data)
+# plotting(data, labels, "kmeans")
 
 # gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
 # labels = gmm.predict(data)
@@ -229,9 +264,9 @@ plotting(data, labels, "kmeans")
 # labels = model.labels_
 # plotting(data, labels, "AgglomerativeClustering")
 
-# dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
-# labels = dbscan.labels_
-# plotting(data, labels, "DBSCAN")
+dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
+labels = dbscan.labels_
+plotting(data, labels, "DBSCAN")
 
 
 number_neighbors = 7
@@ -241,8 +276,8 @@ kdtree = KDTree(latent_z_set)
 
 tasks_skill = []
 
-task_length = [5,5]
-demo_id = [1,2,3,4,5,1,2,3,4,5]
+task_length = [5,5,5,5]
+demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
 count = 0
 for i in range( len(task_length) ):
 	task_skill = []
@@ -258,8 +293,8 @@ for i in range( len(task_length) ):
 			demo_skill.append( skill )
 		demo_skill_result = remove_same_neighbor(demo_skill)
 		print("ground_truth: ", tasks_seg[i][j])
-
-		get_demo_score(i, j, demo_skill)
+		print("")
+		# get_demo_score(i, j, demo_skill)
 
 		task_skill.append(demo_skill_result)	
 		count += 1
