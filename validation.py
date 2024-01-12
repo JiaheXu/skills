@@ -129,12 +129,13 @@ tasks_seg = [task1_seg, task2_seg, task3_seg, task4_seg]
 segment_length = 14
 
 
-file_path2 = "/home/mmpug/skills/TrainingLogs/MAGI_0107_test/MEval/Latent_Z/"
-latent_z_set = np.load(os.path.join(file_path2, "latent_z_test.npy"), allow_pickle=True)
+# file_path2 = "/home/mmpug/skills/TrainingLogs/MAGI_0107_test/MEval/Latent_Z/"
+file_path = "./"
+latent_z_set = np.load(os.path.join(file_path, "latent_z_test.npy"), allow_pickle=True)
 
 print("latent_z_set: ", latent_z_set.shape)
 
-test_set = np.load(os.path.join(file_path2, "latent_z_for_validation.npy"), allow_pickle=True)
+test_set = np.load(os.path.join(file_path, "latent_z_for_validation.npy"), allow_pickle=True)
 print("test_set: ", len(test_set))
 
 for i in range(len(test_set)):
@@ -159,8 +160,22 @@ def get_robot_embedding(latent_z_set, return_tsne_object=False, perplexity=None)
 	else:
 		return scaled_embedded_zs
 
-def plotting(data, label, title):
-	plt.scatter(data[:, 0], data[:, 1], c=labels, s=40, cmap='viridis')
+def plotting(data, labels, title):
+	fig, ax = plt.subplots()
+	colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+	labels = labels.astype(int)
+	data_color = [ colors[label] for label in labels]
+	ax.scatter(data[:, 0], data[:, 1], c=data_color, s=40, cmap='viridis')
+
+
+	handles = [ plt.Line2D([0], [0], color=colors[idx], lw=4, label=" skill {0} ".format(idx+1)) for idx in range(len(colors))]
+
+	# handles = [ 
+	# 	plt.Line2D([0], [0], color=colors[0], lw=4, label=" skill 1 "),
+    # 	plt.Line2D([0], [0], color=colors[1], lw=4, label=" skill 2 "),
+    # 	plt.Line2D([0], [0], color=colors[2], lw=4, label=" skill 3 ")]
+	legend = ax.legend(loc="best", handles=handles)
+	ax.grid(True)
 	plt.savefig(title + ".png")
 
 def remove_same_neighbor( demo_skills ):
@@ -188,8 +203,10 @@ def get_demo_score(task_id, demo_id, demo_skills):
 			print(demo_skills[i])
 			stack.append(demo_skills[i])
 	stack = np.array( stack ,dtype=np.int32) 
+	seg1 = -1
 	if(stack.shape[0]>0):
-		final_stack.append(np.bincount(stack).argmax())
+		seg1 = np.bincount(stack).argmax()
+		final_stack.append(seg1)
 
 	
 	stack = []
@@ -226,12 +243,13 @@ def get_demo_score(task_id, demo_id, demo_skills):
 
 	return score
 
-data = get_robot_embedding(latent_z_set, perplexity=10) #!!! here
-cluster_num = 3
+perplexity = 10
+data = get_robot_embedding(latent_z_set, perplexity=perplexity) #!!! here
+cluster_num = 4
 
-# kmeans = KMeans(cluster_num, random_state=0)
-# labels = kmeans.fit(data).predict(data)
-# plotting(data, labels, "kmeans")
+kmeans = KMeans(cluster_num, random_state=0)
+labels = kmeans.fit(data).predict(data)
+plotting(data, labels, "kmeans")
 
 # gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
 # labels = gmm.predict(data)
@@ -264,41 +282,38 @@ cluster_num = 3
 # labels = model.labels_
 # plotting(data, labels, "AgglomerativeClustering")
 
-dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
-labels = dbscan.labels_
-plotting(data, labels, "DBSCAN")
+# dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
+# labels = dbscan.labels_
+# plotting(data, labels, "DBSCAN")
 
 
 number_neighbors = 7
-
 kdtree = KDTree(latent_z_set)
-# z_neighbor_distances, z_neighbors_indices = kdtree.query( test_set ,p = 2, k=number_neighbors)
-
 tasks_skill = []
 
-task_length = [5,5,5,5]
-demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
-count = 0
-for i in range( len(task_length) ):
-	task_skill = []
-	for j in range(task_length[i]):
-		print("task: ", i," demo: ", count)
-		demo_skill = []
+# task_length = [5,5,5,5]
+# demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
+# count = 0
+# for i in range( len(task_length) ):
+# 	task_skill = []
+# 	for j in range(task_length[i]):
+# 		print("task: ", i," demo: ", count)
+# 		demo_skill = []
 		
-		for start_point in range(0, test_set[count].shape[0], 14 ):
-			data_point = test_set[count][start_point]
-			z_neighbor_distances, z_neighbors_indices = kdtree.query( data_point ,p = 2, k=number_neighbors)
-			skill = np.bincount(labels[z_neighbors_indices]).argmax()
-			print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
-			demo_skill.append( skill )
-		demo_skill_result = remove_same_neighbor(demo_skill)
-		print("ground_truth: ", tasks_seg[i][j])
-		print("")
-		# get_demo_score(i, j, demo_skill)
+# 		for start_point in range(0, test_set[count].shape[0], 14 ):
+# 			data_point = test_set[count][start_point]
+# 			z_neighbor_distances, z_neighbors_indices = kdtree.query( data_point ,p = 2, k=number_neighbors)
+# 			skill = np.bincount(labels[z_neighbors_indices]).argmax()
+# 			print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
+# 			demo_skill.append( skill )
+# 		# demo_skill_result = remove_same_neighbor(demo_skill)
+# 		print("ground_truth: ", tasks_seg[i][j])
+# 		# print("")
+# 		get_demo_score(i, j, demo_skill)
 
-		task_skill.append(demo_skill_result)	
-		count += 1
-	# task_skill_result = get_state_machine(task_skill)
-	tasks_skill.append(task_skill)
-	# tasks_skill.append(task_skill_result)
-	print("\n")
+# 		# task_skill.append(demo_skill_result)	
+# 		count += 1
+# 	# task_skill_result = get_state_machine(task_skill)
+# 	tasks_skill.append(task_skill)
+# 	# tasks_skill.append(task_skill_result)
+# 	print("\n")

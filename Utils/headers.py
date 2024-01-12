@@ -49,6 +49,15 @@ from scipy.ndimage.filters import gaussian_filter1d
 from scipy.signal import find_peaks, argrelextrema
 from scipy.spatial import KDTree
 
+
+from sklearn import mixture
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import Birch
+from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import MeanShift
+from sklearn.cluster import OPTICS
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import NearestNeighbors
 # from pytorch3d.loss import chamfer_distance
 import random

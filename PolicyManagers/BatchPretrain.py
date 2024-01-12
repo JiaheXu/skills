@@ -133,7 +133,9 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 					stats['epoch'] = self.current_epoch_running
 					stats['batch_size'] = self.args.batch_size			
 					self.update_plots(counter, loglikelihood, state_action_trajectory, stats)
-
+					# self.args.train = False
+					self.evaluate()
+					# self.args.train = True
 				if return_z:
 					return latent_z, input_dict['sample_traj'], sample_action_seq, input_dict['data_element']
 			else:
@@ -299,11 +301,14 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 	def evaluate(self, model=None, save_latent_z_title = None):
 		
+
+		args_train = self.args.train
+
+		self.args.train = False
+		
 		if model:
 			print("Loading model in evaluating.")
 			self.load_all_models(model)	
-
-
 
 		if self.state_trajectory_test is None:
 			self.get_evaluate_data() #concatenated_traj = self.concat_state_action(batch_trajectory, action_sequence)
@@ -320,22 +325,75 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		else:
 			self.save_latent_z( self.latent_z_set, "latent_z_test")
 
+		# self.clustering( self.demo_latent_z_test )
+		# self.predict_test_latent_z()
+		# self.score_result()
+
 		# self.latent_z_set = self.latent_z_test
 
-		self.embedded_z_dict = {} 
-		self.embedded_z_dict['perp5'] = self.get_robot_embedding(perplexity=5) #!!! here need self.latent_z_set
-		self.embedded_z_dict['perp10'] = self.get_robot_embedding(perplexity=10)
-		self.embedded_z_dict['perp30'] = self.get_robot_embedding(perplexity=30)
-		self.embedded_z_dict['perp50'] = self.get_robot_embedding(perplexity=50)
-		self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
+		# self.embedded_z_dict = {} 
+		# self.embedded_z_dict['perp5'] = self.get_robot_embedding(perplexity=5) #!!! here need self.latent_z_set
+		# self.embedded_z_dict['perp10'] = self.get_robot_embedding(perplexity=10)
+		# self.embedded_z_dict['perp30'] = self.get_robot_embedding(perplexity=30)
+		# self.embedded_z_dict['perp50'] = self.get_robot_embedding(perplexity=50)
+		# self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
 
-		image_perp5 = self.plot_embedding(self.embedded_z_dict['perp5'], title="Z Space Perp 5") #!!! here
-		image_perp10 = self.plot_embedding(self.embedded_z_dict['perp10'], title="Z Space Perp 10")
-		image_perp30 = self.plot_embedding(self.embedded_z_dict['perp30'], title="Z Space Perp 30")
-		image_perp50 = self.plot_embedding(self.embedded_z_dict['perp50'], title="Z Space Perp 50")
-		image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space Perp 100")
+		# image_perp5 = self.plot_embedding(self.embedded_z_dict['perp5'], title="Z Space Perp 5") #!!! here
+		# image_perp10 = self.plot_embedding(self.embedded_z_dict['perp10'], title="Z Space Perp 10")
+		# image_perp30 = self.plot_embedding(self.embedded_z_dict['perp30'], title="Z Space Perp 30")
+		# image_perp50 = self.plot_embedding(self.embedded_z_dict['perp50'], title="Z Space Perp 50")
+		# image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space Perp 100")
+
+		self.args.train = args_train
 
 		return
+	def clustering(self, datapoints, cluster_num):
+		label_results = []
+
+		kmeans = KMeans(cluster_num, random_state=0)
+		labels = kmeans.fit(data).predict(data)
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "kmeans")
+
+		gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
+		labels = gmm.predict(data)
+		# plotting(data, labels, "gmm")
+
+		birch = Birch(n_clusters=cluster_num)
+		birch.fit(data)
+		labels = birch.predict(data)
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "birch")
+
+		model = AffinityPropagation(random_state=0)
+		model.fit(data)
+		labels = model.labels_
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "AffinityPropagation")
+
+
+		model = MeanShift(bandwidth=2)
+		model.fit(data)
+		labels = model.labels_
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "MeanShift")
+
+		model = OPTICS(min_samples=5)
+		model.fit(data)
+		labels = model.labels_
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "OPTICS")
+
+		model = AgglomerativeClustering()
+		model.fit(data)
+		labels = model.labels_
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "AgglomerativeClustering")
+
+		dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
+		labels = dbscan.labels_
+		label_results.append( copy.deepcopy(labels) )
+		# plotting(data, labels, "DBSCAN")
 
 	def get_trajectory_segment(self, i):
 		if self.args.debug:
