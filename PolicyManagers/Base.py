@@ -29,6 +29,8 @@ class PolicyManager_BaseClass():
 		self.args = args
 		self.dataset = dataset
 
+		self.colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:pruple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+
 		# Fixing seeds.
 		print("Setting random seeds.")
 		np.random.seed(seed=self.args.seed)
@@ -407,7 +409,7 @@ class PolicyManager_BaseClass():
 			self.embedded_z_dict['perp10'] = self.get_robot_embedding(perplexity=10)
 			self.embedded_z_dict['perp30'] = self.get_robot_embedding(perplexity=30)
 			self.embedded_z_dict['perp50'] = self.get_robot_embedding(perplexity=50)
-			self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
+			# self.embedded_z_dict['perp100'] = self.get_robot_embedding(perplexity=100)
 
 			# Save embedded z's and trajectory and latent sets.
 			self.save_latent_sets(stat_dictionary)
@@ -418,14 +420,14 @@ class PolicyManager_BaseClass():
 			image_perp10 = self.plot_embedding(self.embedded_z_dict['perp10'], title="Z Space {0} Perp 10".format(statistics_line))
 			image_perp30 = self.plot_embedding(self.embedded_z_dict['perp30'], title="Z Space {0} Perp 30".format(statistics_line))
 			image_perp50 = self.plot_embedding(self.embedded_z_dict['perp50'], title="Z Space {0} Perp 50".format(statistics_line))
-			image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space {0} Perp 100".format(statistics_line))
+			# image_perp100 = self.plot_embedding(self.embedded_z_dict['perp100'], title="Z Space {0} Perp 100".format(statistics_line))
 
 			# Now adding image visuals to the wandb logs.
 			log_dict["Embedded Z Space Perplexity 5"] = self.return_wandb_image(image_perp5)
 			log_dict["Embedded Z Space Perplexity 10"] =  self.return_wandb_image(image_perp10)
 			log_dict["Embedded Z Space Perplexity 30"] =  self.return_wandb_image(image_perp30)
 			log_dict["Embedded Z Space Perplexity 50"] =  self.return_wandb_image(image_perp50)
-			log_dict["Embedded Z Space Perplexity 100"] =  self.return_wandb_image(image_perp100)
+			# log_dict["Embedded Z Space Perplexity 100"] =  self.return_wandb_image(image_perp100)
 
 		if( self.args.use_wandb ):
 			wandb.log(log_dict, step=counter)

@@ -166,14 +166,7 @@ def plotting(data, labels, title):
 	labels = labels.astype(int)
 	data_color = [ colors[label] for label in labels]
 	ax.scatter(data[:, 0], data[:, 1], c=data_color, s=40, cmap='viridis')
-
-
 	handles = [ plt.Line2D([0], [0], color=colors[idx], lw=4, label=" skill {0} ".format(idx+1)) for idx in range(len(colors))]
-
-	# handles = [ 
-	# 	plt.Line2D([0], [0], color=colors[0], lw=4, label=" skill 1 "),
-    # 	plt.Line2D([0], [0], color=colors[1], lw=4, label=" skill 2 "),
-    # 	plt.Line2D([0], [0], color=colors[2], lw=4, label=" skill 3 ")]
 	legend = ax.legend(loc="best", handles=handles)
 	ax.grid(True)
 	plt.savefig(title + ".png")
