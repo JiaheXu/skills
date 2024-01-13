@@ -301,9 +301,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 	def evaluate(self, model=None, save_latent_z_title = None):
 		
-
 		args_train = self.args.train
-
 		self.args.train = False
 		
 		if model:
@@ -325,8 +323,12 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		else:
 			self.save_latent_z( self.latent_z_set, "latent_z_test")
 
-		labels = self.clustering( self.demo_latent_z_test )
-		# self.predict_test_latent_z(self.demo_latent_z_test, labels)
+		# print("self.latent_z_set: ", self.latent_z_set.shape) # for clustering
+		# self.latent_z_test # for each demo
+		labels = self.clustering( self.latent_z_set )
+		# print("self.latent_z_set: ", self.latent_z_set.shape)
+		# print("self.latent_z_test: ", self.latent_z_test.shape)
+		self.predict_test_latent_z( self.latent_z_set, self.demo_latent_z_test, labels)
 		# self.score_result()
 
 		# self.latent_z_set = self.latent_z_test
@@ -349,9 +351,10 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		return
 
 
-	def plotting(data, labels, title):
+	def plotting(self, data, labels, title):
 		fig, ax = plt.subplots()
-		colors = self.colors[0:np.max(labels)]
+		colors = self.colors[0:np.max(labels)+1]
+		# print("colors: ", colors)
 		labels = labels.astype(int)
 		data_color = [ colors[label] for label in labels]
 		ax.scatter(data[:, 0], data[:, 1], c=data_color, s=40, cmap='viridis')
@@ -360,8 +363,10 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		ax.grid(True)
 		plt.savefig(title + ".png")
 
-	def predict_test_latent_z(latent_z_set, test_point, labels):
-		number_neighbors = 7
+	def predict_test_latent_z(self, latent_z_set, test_set, labels, number_neighbors = 7):
+		
+
+		print("latent_z_set: ", latent_z_set.shape)
 		kdtree = KDTree(latent_z_set)
 		tasks_skill = []
 
@@ -391,59 +396,59 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 			# tasks_skill.append(task_skill_result)
 			print("\n")
 
-	def clustering(self, data, cluster_num = 1, method = 'kmeans'):
+	def clustering(self, data, cluster_num = 2, method = 'kmeans'):
 		label_results = []
 		if(method == 'kmeans'):
 			kmeans = KMeans(cluster_num, random_state=0)
 			labels = kmeans.fit(data).predict(data)
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "kmeans")
+			self.plotting(data, labels, "kmeans")
 
 		elif(method == 'gmm'):
 			gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
 			labels = gmm.predict(data)
-			plotting(data, labels, "gmm")
+			self.plotting(data, labels, "gmm")
 
 		elif(method == 'birch'):
 			birch = Birch(n_clusters=cluster_num)
 			birch.fit(data)
 			labels = birch.predict(data)
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "birch")
+			self.plotting(data, labels, "birch")
 
 		elif(method == 'affin'):
 			model = AffinityPropagation(random_state=0)
 			model.fit(data)
 			labels = model.labels_
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "AffinityPropagation")
+			self.plotting(data, labels, "AffinityPropagation")
 
 		elif(method == 'meanshift'):
 			model = MeanShift(bandwidth=2)
 			model.fit(data)
 			labels = model.labels_
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "MeanShift")
+			self.plotting(data, labels, "MeanShift")
 
 		elif(method == 'optics'):
 			model = OPTICS(min_samples=5)
 			model.fit(data)
 			labels = model.labels_
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "OPTICS")
+			self.plotting(data, labels, "OPTICS")
 		
 		elif(method == 'agglo'):
 			model = AgglomerativeClustering()
 			model.fit(data)
 			labels = model.labels_
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "AgglomerativeClustering")
+			self.plotting(data, labels, "AgglomerativeClustering")
 		
 		elif(method == 'dbscan'):
 			dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
 			labels = dbscan.labels_
 			label_results.append( copy.deepcopy(labels) )
-			plotting(data, labels, "DBSCAN")
+			self.plotting(data, labels, "DBSCAN")
 		else:
 			labels = np.zeros((data.shape[0],))
 			print("unrecognized clustering method!!!!!!!!!!!!")
