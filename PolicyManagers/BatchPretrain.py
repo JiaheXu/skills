@@ -325,11 +325,50 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 		# print("self.latent_z_set: ", self.latent_z_set.shape) # for clustering
 		# self.latent_z_test # for each demo
-		labels = self.clustering( self.latent_z_set )
 		# print("self.latent_z_set: ", self.latent_z_set.shape)
 		# print("self.latent_z_test: ", self.latent_z_test.shape)
-		self.predict_test_latent_z( self.latent_z_set, self.demo_latent_z_test, labels)
-		# self.score_result()
+				
+		perplexities = [5, 10, 30, 50]
+		
+		# clustering after t-sne
+		for perplexity in perplexities:
+			data = copy.deepcopy( self.latent_z_set )
+			embedded_zs = self.get_robot_embedding(perplexity=perplexity, data=data)
+			for cluster_num in range( 2, len(self.colors) ): # 0 ~ 10
+				for method in self.clustering_methods:
+					print("cluster_num: ", cluster_num)
+					print("cluster_num: ", cluster_num)
+					print("cluster_num: ", cluster_num)
+					print("method: ", method)
+					print("method: ", method)
+					print("method: ", method)
+					labels = self.clustering( data = embedded_zs, cluster_num = cluster_num , method = method)
+					if(np.max(labels)+1 > len(self.colors)):
+						continue
+					if(np.max(labels)+1 < 1):
+						continue
+					self.predict_test_latent_z( data, self.demo_latent_z_test, labels)
+					self.plotting(embedded_zs, labels, method)
+
+		# clustering before t-sne		
+		for cluster_num in range( 2, len(self.colors) ): # 0 ~ 10
+			for method in self.clustering_methods:
+				print("cluster_num: ", cluster_num)
+				print("cluster_num: ", cluster_num)
+				print("cluster_num: ", cluster_num)
+				print("method: ", method)
+				print("method: ", method)
+				print("method: ", method)
+				labels = self.clustering( data = self.latent_z_set, cluster_num = cluster_num , method = method)
+				if(np.max(labels)+1 > len(self.colors)):
+					continue
+				if(np.max(labels)+1 < 1):
+					continue
+				self.predict_test_latent_z( latent_z_set = self.latent_z_set, test_set=self.demo_latent_z_test, labels=labels)
+				for perplexity in perplexities:
+					data = copy.deepcopy( self.latent_z_set )
+					embedded_zs = self.get_robot_embedding(perplexity=perplexity, data=data)
+					self.plotting(embedded_zs, labels, method)
 
 		# self.latent_z_set = self.latent_z_test
 
@@ -353,7 +392,12 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 	def plotting(self, data, labels, title):
 		fig, ax = plt.subplots()
+		if(np.max(labels)+1 > len(self.colors)):
+			return
+		if(np.max(labels)+1 < 1):
+			return
 		colors = self.colors[0:np.max(labels)+1]
+		# print("np.max(labels): ", np.max(labels))
 		# print("colors: ", colors)
 		labels = labels.astype(int)
 		data_color = [ colors[label] for label in labels]
@@ -363,97 +407,174 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		ax.grid(True)
 		plt.savefig(title + ".png")
 
-	def predict_test_latent_z(self, latent_z_set, test_set, labels, number_neighbors = 7):
-		
 
-		print("latent_z_set: ", latent_z_set.shape)
+	def get_demo_score(self, task_id, demo_id, ground_truth, demo_skills):
+		segment_length = self.args.test_length
+		
+		final_stack = []
+		stack = []
+		for i in range( len(demo_skills) ):
+			start_time = i*segment_length
+			end_time = start_time + segment_length - 1
+			if(end_time <= ground_truth[0]):
+				# print(demo_skills[i])
+				stack.append(demo_skills[i])
+		stack = np.array( stack ,dtype=np.int32) 
+		if(stack.shape[0]>0):
+			final_stack.append( np.bincount(stack).argmax() )
+		
+		stack = []
+		for i in range( len(demo_skills) ):
+			start_time = i*segment_length
+			end_time = start_time + segment_length - 1
+			if(ground_truth[0] - segment_length < start_time  and end_time < ground_truth[1]):
+				if(demo_skills[i] not in final_stack):
+					# print(demo_skills[i])
+					stack.append(demo_skills[i])
+		stack = np.array( stack ,dtype=np.int32) 
+		if(stack.shape[0]>0):
+			final_stack.append(np.bincount(stack).argmax())
+
+		stack = []
+		for i in range( len(demo_skills) ):
+			start_time = i*segment_length
+			end_time = start_time + segment_length - 1
+			if(ground_truth[1] <= start_time ):
+				if(demo_skills[i] not in final_stack):
+					# print(demo_skills[i])
+					stack.append(demo_skills[i])
+		stack = np.array( stack ,dtype=np.int32) 
+		if(stack.shape[0]>0):
+			final_stack.append(np.bincount(stack).argmax())
+		
+		unique_stack = np.unique(final_stack)
+
+		score = 0
+		if(len(final_stack) == len(unique_stack)):
+			score = 1
+
+		print("skill seq: {0} score: {1}".format(final_stack, score) )
+
+		return final_stack, score
+
+	def predict_test_latent_z(self, latent_z_set=None, test_set = None, labels= None, number_neighbors = 7):
+		# print("latent_z_set: ", latent_z_set.shape)
+		
+		task1_seg = [[94, 135], [94, 146], [87, 119],[106, 133],[120, 160],[120, 163],[130, 170],[160, 190],[235, 270],[190, 240],
+		[250, 300],[120, 170],[190, 240],[140, 180],[210, 250],[180, 230],[150, 210],[180, 220],[290, 330],[260, 300]]
+
+		task2_seg = [[160, 195],[190, 230],[140, 182],[150, 190], [160, 200], [230, 270], [140, 170], [140, 170], [140, 170], [110, 135], 
+		[160, 180], [150, 180], [130, 150], [140, 175], [130, 160], [125, 155], [160, 190], [175, 205], [175, 205], [155, 185]]
+
+		task3_seg = [[150, 190],[180, 220],[150, 181],[145, 170], [145, 170], [170, 200], [150, 170], [160, 190], [150, 175], [160, 180], 
+		[160, 190], [190, 210], [140, 170], [150, 170], [160, 190], [170, 200], [195, 225], [170, 190], [130, 160], [160, 190]] 
+
+		task4_seg = [[125, 185],[120, 155],[175, 215],[135, 170],[120, 165],[125, 160],[220, 270],[105, 130],[160, 200],[165, 200],
+		[120, 150],[270, 310],[160, 205],[165, 195],[165, 210],[150, 180],[210, 240],[180, 215],[185, 215],[100, 120]]
+
+		task1_seg = np.array(task1_seg)
+		task2_seg = np.array(task2_seg)
+		task3_seg = np.array(task3_seg)
+		task4_seg = np.array(task4_seg)
+
+		tasks_seg = [task1_seg, task2_seg, task3_seg, task4_seg]
+		
 		kdtree = KDTree(latent_z_set)
 		tasks_skill = []
 
 		task_length = [5,5,5,5]
-		demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
+		# demo_id = [1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5]
 		count = 0
 		for i in range( len(task_length) ):
 			task_skill = []
 			for j in range(task_length[i]):
-				print("task: ", i," demo: ", count)
+				# if(self.args.debug_clustering):
+					# print("task: ", i," demo: ", count)
 				demo_skill = []
-				
 				for start_point in range(0, test_set[count].shape[0], 14 ):
 					test_point = test_set[count][start_point]
 					z_neighbor_distances, z_neighbors_indices = kdtree.query( test_point ,p = 2, k=number_neighbors)
 					skill = np.bincount(labels[z_neighbors_indices]).argmax()
-					print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
+					# if(self.args.debug_clustering):
+						# print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
+						# print("ground_truth: ", tasks_seg[i][j])
 					demo_skill.append( skill )
+			
+				demo_skill_result, score = self.get_demo_score(i, j, tasks_seg[i][j],  demo_skill)
 				# demo_skill_result = remove_same_neighbor(demo_skill)
-				# print("ground_truth: ", tasks_seg[i][j])
-				# print("")
-				# get_demo_score(i, j, demo_skill)
-				# task_skill.append(demo_skill_result)	
+				task_skill.append(demo_skill_result)
 				count += 1
+				
+			final_skill_seq = task_skill[0]
+			counter = 0
+			for skill_seq in task_skill:
+				curr_frequency = task_skill.count( skill_seq )
+				if(curr_frequency> counter):
+					counter = curr_frequency
+					final_skill_seq = skill_seq
+			if len(final_skill_seq) == 3:
+				print("success !!!")
+				print("success !!!")
+				print("success !!!")
 			# task_skill_result = get_state_machine(task_skill)
 			# tasks_skill.append(task_skill)
 			# tasks_skill.append(task_skill_result)
 			print("\n")
 
 	def clustering(self, data, cluster_num = 2, method = 'kmeans'):
-		label_results = []
+
+		labels = None
 		if(method == 'kmeans'):
 			kmeans = KMeans(cluster_num, random_state=0)
 			labels = kmeans.fit(data).predict(data)
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "kmeans")
+
 
 		elif(method == 'gmm'):
 			gmm = mixture.GaussianMixture(cluster_num, covariance_type='full').fit(data)
 			labels = gmm.predict(data)
-			self.plotting(data, labels, "gmm")
 
 		elif(method == 'birch'):
 			birch = Birch(n_clusters=cluster_num)
 			birch.fit(data)
 			labels = birch.predict(data)
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "birch")
+
 
 		elif(method == 'affin'):
 			model = AffinityPropagation(random_state=0)
 			model.fit(data)
 			labels = model.labels_
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "AffinityPropagation")
+
 
 		elif(method == 'meanshift'):
 			model = MeanShift(bandwidth=2)
 			model.fit(data)
 			labels = model.labels_
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "MeanShift")
+
 
 		elif(method == 'optics'):
 			model = OPTICS(min_samples=5)
 			model.fit(data)
 			labels = model.labels_
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "OPTICS")
+
 		
 		elif(method == 'agglo'):
 			model = AgglomerativeClustering()
 			model.fit(data)
 			labels = model.labels_
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "AgglomerativeClustering")
 		
 		elif(method == 'dbscan'):
 			dbscan = DBSCAN(eps = 10, min_samples= 5).fit(data)
 			labels = dbscan.labels_
-			label_results.append( copy.deepcopy(labels) )
-			self.plotting(data, labels, "DBSCAN")
+
+
 		else:
 			labels = np.zeros((data.shape[0],))
 			print("unrecognized clustering method!!!!!!!!!!!!")
 			print("unrecognized clustering method!!!!!!!!!!!!")
 			print("unrecognized clustering method!!!!!!!!!!!!")
+		# lables = np.array(labels)
+		# print("lables: ", lables)
+		labels = labels - np.min(labels) # every element would be non-neg
 		return labels
 
 	def get_trajectory_segment(self, i):

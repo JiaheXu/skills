@@ -324,6 +324,7 @@ def parse_arguments():
 	parser.add_argument('--debug_evaluate',dest="debug_evaluate",type=int,default=0,help='debug_evaluate')
 	parser.add_argument('--map_back',dest="map_back",type=int,default=1,help='map_back')
 	parser.add_argument('--train_latent_z',dest="train_latent_z",type=str,help='train_latent_z')
+	parser.add_argument('--debug_clustering',dest="debug_clustering",type=int,default=0,help='debug_clustering')
 	return parser.parse_args()
 
 def main(args):

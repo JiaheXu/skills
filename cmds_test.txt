@@ -292,4 +292,5 @@ CUDA_VISIBLE_DEVICES=0 python3 master.py \
  --debug=0 \
  --debug_evaluate=0 \
  --ds_freq=1 \
+ --debug_clustering=1 \
  --model=/ws/skills/TrainingLogs/skills_MAGI_0107/saved_models/Model_epoch2000

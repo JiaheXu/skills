@@ -29,8 +29,8 @@ class PolicyManager_BaseClass():
 		self.args = args
 		self.dataset = dataset
 
-		self.colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:pruple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
-
+		self.colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan', "bisque", "lime", "tomato"]
+		self.clustering_methods = ['kmeans', 'gmm', 'birch', 'affin', 'meanshift', 'optics', 'agglo', 'dbscan']
 		# Fixing seeds.
 		print("Setting random seeds.")
 		np.random.seed(seed=self.args.seed)
@@ -483,13 +483,15 @@ class PolicyManager_BaseClass():
 
 		return anim
 
-	def get_robot_embedding(self, return_tsne_object=False, perplexity=None): #!!! here
+	def get_robot_embedding(self, return_tsne_object=False, perplexity=None, data=None): #!!! here
 
 		# # Mean and variance normalize z.
 		# mean = self.latent_z_set.mean(axis=0)
 		# std = self.latent_z_set.std(axis=0)
 		# normed_z = (self.latent_z_set-mean)/std
-		normed_z = self.latent_z_set #!!! here
+		normed_z = data
+		if(data is None):
+			normed_z = self.latent_z_set #!!! here
 
 		if perplexity is None:
 			perplexity = self.args.perplexity

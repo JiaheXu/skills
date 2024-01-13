@@ -207,9 +207,11 @@ def get_demo_score(task_id, demo_id, demo_skills):
 	for i in range( len(demo_skills) ):
 		start_time = i*segment_length
 		end_time = start_time + segment_length - 1
-		if(ground_truth[0] < start_time  and end_time < ground_truth[1]):
-			print(demo_skills[i])
-			stack.append(demo_skills[i])
+		if(ground_truth[0]-segment_length < start_time  and end_time < ground_truth[1]):
+			if(demo_skills[i] not in final_stack):
+				print(demo_skills[i])
+				stack.append(demo_skills[i])
+	# stack = 
 	stack = np.array( stack ,dtype=np.int32) 
 	if(stack.shape[0]>0):
 		final_stack.append(np.bincount(stack).argmax())
@@ -221,8 +223,10 @@ def get_demo_score(task_id, demo_id, demo_skills):
 		start_time = i*segment_length
 		end_time = start_time + segment_length - 1
 		if(ground_truth[1] <= start_time ):
-			print(demo_skills[i])
-			stack.append(demo_skills[i])
+			if(demo_skills[i] not in final_stack):
+				print(demo_skills[i])
+				stack.append(demo_skills[i])
+				
 	stack = np.array( stack ,dtype=np.int32) 
 	if(stack.shape[0]>0):
 		final_stack.append(np.bincount(stack).argmax())
@@ -284,29 +288,29 @@ number_neighbors = 7
 kdtree = KDTree(latent_z_set)
 tasks_skill = []
 
-# task_length = [5,5,5,5]
-# demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
-# count = 0
-# for i in range( len(task_length) ):
-# 	task_skill = []
-# 	for j in range(task_length[i]):
-# 		print("task: ", i," demo: ", count)
-# 		demo_skill = []
+task_length = [5,5,5,5]
+demo_id = [1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5]
+count = 0
+for i in range( len(task_length) ):
+	task_skill = []
+	for j in range(task_length[i]):
+		print("task: ", i," demo: ", count)
+		demo_skill = []
 		
-# 		for start_point in range(0, test_set[count].shape[0], 14 ):
-# 			data_point = test_set[count][start_point]
-# 			z_neighbor_distances, z_neighbors_indices = kdtree.query( data_point ,p = 2, k=number_neighbors)
-# 			skill = np.bincount(labels[z_neighbors_indices]).argmax()
-# 			print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
-# 			demo_skill.append( skill )
-# 		# demo_skill_result = remove_same_neighbor(demo_skill)
-# 		print("ground_truth: ", tasks_seg[i][j])
-# 		# print("")
-# 		get_demo_score(i, j, demo_skill)
+		for start_point in range(0, test_set[count].shape[0], 14 ):
+			data_point = test_set[count][start_point]
+			z_neighbor_distances, z_neighbors_indices = kdtree.query( data_point ,p = 2, k=number_neighbors)
+			skill = np.bincount(labels[z_neighbors_indices]).argmax()
+			print("step ", start_point, ' to ',  start_point+13, " is : ", labels[z_neighbors_indices], skill)
+			demo_skill.append( skill )
+		# demo_skill_result = remove_same_neighbor(demo_skill)
+		print("ground_truth: ", tasks_seg[i][j])
+		# print("")
+		get_demo_score(i, j, demo_skill)
 
-# 		# task_skill.append(demo_skill_result)	
-# 		count += 1
-# 	# task_skill_result = get_state_machine(task_skill)
-# 	tasks_skill.append(task_skill)
-# 	# tasks_skill.append(task_skill_result)
-# 	print("\n")
+		# task_skill.append(demo_skill_result)	
+		count += 1
+	# task_skill_result = get_state_machine(task_skill)
+	tasks_skill.append(task_skill)
+	# tasks_skill.append(task_skill_result)
+	print("\n")
