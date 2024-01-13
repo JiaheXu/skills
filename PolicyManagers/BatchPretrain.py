@@ -329,19 +329,21 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		# print("self.latent_z_test: ", self.latent_z_test.shape)
 				
 		perplexities = [5, 10, 30, 50]
-		
+		cluster_num_start = 3
+		cluster_num_end = 4
+
 		# clustering after t-sne
 		for perplexity in perplexities:
 			data = copy.deepcopy( self.latent_z_set )
 			embedded_zs = self.get_robot_embedding(perplexity=perplexity, data=data)
-			for cluster_num in range( 2, len(self.colors) ): # 0 ~ 10
+			for cluster_num in range( cluster_num_start, cluster_num_end ): # 0 ~ 10
 				for method in self.clustering_methods:
-					print("cluster_num: ", cluster_num)
-					print("cluster_num: ", cluster_num)
-					print("cluster_num: ", cluster_num)
-					print("method: ", method)
-					print("method: ", method)
-					print("method: ", method)
+					# print("cluster_num: ", cluster_num)
+					# print("cluster_num: ", cluster_num)
+					# print("cluster_num: ", cluster_num)
+					# print("method: ", method)
+					# print("method: ", method)
+					# print("method: ", method)
 					labels = self.clustering( data = embedded_zs, cluster_num = cluster_num , method = method)
 					if(np.max(labels)+1 > len(self.colors)):
 						continue
@@ -351,24 +353,24 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 					self.plotting(embedded_zs, labels, method)
 
 		# clustering before t-sne		
-		for cluster_num in range( 2, len(self.colors) ): # 0 ~ 10
-			for method in self.clustering_methods:
-				print("cluster_num: ", cluster_num)
-				print("cluster_num: ", cluster_num)
-				print("cluster_num: ", cluster_num)
-				print("method: ", method)
-				print("method: ", method)
-				print("method: ", method)
-				labels = self.clustering( data = self.latent_z_set, cluster_num = cluster_num , method = method)
-				if(np.max(labels)+1 > len(self.colors)):
-					continue
-				if(np.max(labels)+1 < 1):
-					continue
-				self.predict_test_latent_z( latent_z_set = self.latent_z_set, test_set=self.demo_latent_z_test, labels=labels)
-				for perplexity in perplexities:
-					data = copy.deepcopy( self.latent_z_set )
-					embedded_zs = self.get_robot_embedding(perplexity=perplexity, data=data)
-					self.plotting(embedded_zs, labels, method)
+		# for cluster_num in range( 3, len(self.colors) ): # 0 ~ 10
+		# 	for method in self.clustering_methods:
+		# 		# print("cluster_num: ", cluster_num)
+		# 		# print("cluster_num: ", cluster_num)
+		# 		# print("cluster_num: ", cluster_num)
+		# 		# print("method: ", method)
+		# 		# print("method: ", method)
+		# 		# print("method: ", method)
+		# 		labels = self.clustering( data = self.latent_z_set, cluster_num = cluster_num , method = method)
+		# 		if(np.max(labels)+1 > len(self.colors)):
+		# 			continue
+		# 		if(np.max(labels)+1 < 1):
+		# 			continue
+		# 		self.predict_test_latent_z( latent_z_set = self.latent_z_set, test_set=self.demo_latent_z_test, labels=labels)
+		# 		for perplexity in perplexities:
+		# 			data = copy.deepcopy( self.latent_z_set )
+		# 			embedded_zs = self.get_robot_embedding(perplexity=perplexity, data=data)
+		# 			self.plotting(embedded_zs, labels, method)
 
 		# self.latent_z_set = self.latent_z_test
 
@@ -453,7 +455,7 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		if(len(final_stack) == len(unique_stack)):
 			score = 1
 
-		print("skill seq: {0} score: {1}".format(final_stack, score) )
+		# print("skill seq: {0} score: {1}".format(final_stack, score) )
 
 		return final_stack, score
 
@@ -481,10 +483,12 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 		
 		kdtree = KDTree(latent_z_set)
 		tasks_skill = []
-
-		task_length = [5,5,5,5]
+		# task_length = [10,10,10,10]
+		task_length = [self.args.test_len_pertask for i in range(4)]
 		# demo_id = [1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5, 1,2,3,4,5]
 		count = 0
+		all_test_skill = []
+		model_score = 0
 		for i in range( len(task_length) ):
 			task_skill = []
 			for j in range(task_length[i]):
@@ -506,20 +510,33 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 				count += 1
 				
 			final_skill_seq = task_skill[0]
-			counter = 0
+			
+			task_score = 0
 			for skill_seq in task_skill:
 				curr_frequency = task_skill.count( skill_seq )
-				if(curr_frequency> counter):
-					counter = curr_frequency
+				if(curr_frequency> task_score):
+					task_score = curr_frequency
 					final_skill_seq = skill_seq
+			# print("final_skill_seq: ", final_skill_seq)
 			if len(final_skill_seq) == 3:
-				print("success !!!")
-				print("success !!!")
-				print("success !!!")
-			# task_skill_result = get_state_machine(task_skill)
-			# tasks_skill.append(task_skill)
-			# tasks_skill.append(task_skill_result)
-			print("\n")
+				# print("success !!!")
+				# print("final_skill_seq: ", final_skill_seq)
+				model_score += task_score
+				all_test_skill.append(final_skill_seq)
+		
+		if( len(all_test_skill) == 4):
+			print("found all tasks!!!!")
+			print("found all tasks!!!!")
+			print("found all tasks!!!!")
+			print("final seq: ", all_test_skill)
+			if(all_test_skill[0][1] == all_test_skill[1][1] and all_test_skill[0][1] == all_test_skill[2][1] and all_test_skill[0][1] == all_test_skill[3][1]):
+				print("found catch")
+			if(all_test_skill[0][0] == all_test_skill[1][0] and all_test_skill[0][0] == all_test_skill[2][0] and all_test_skill[0][0] == all_test_skill[3][0]):
+				print("found reach handel")
+			if(all_test_skill[0][2] == all_test_skill[1][2] and all_test_skill[0][2] == all_test_skill[2][2] and all_test_skill[0][2] == all_test_skill[3][2]):
+				print("found reach goal")
+			if(all_test_skill[0][2] == all_test_skill[3][2] and all_test_skill[1][2] == all_test_skill[2][2] and all_test_skill[0][2] != all_test_skill[1][2]):
+				print("found push and pull seperately")
 
 	def clustering(self, data, cluster_num = 2, method = 'kmeans'):
 
@@ -729,10 +746,6 @@ class PolicyManager_BatchPretrain(PolicyManager_BaseClass):
 
 		return latent_z_indices, latent_b	
 		# return latent_z_indices
-
-
-
-
 
 	def concat_state_action(self, sample_traj, sample_action_seq):
 		# Add blank to start of action sequence and then concatenate. 
